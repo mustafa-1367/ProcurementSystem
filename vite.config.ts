@@ -4,6 +4,8 @@
   import path from 'path';
 
   export default defineConfig({
+    // Base path for GitHub Pages (repo hosted at https://saaysalim.github.io/ProcurementSystem)
+    base: '/ProcurementSystem/',
     plugins: [react()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
