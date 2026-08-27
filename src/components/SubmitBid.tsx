@@ -124,7 +124,7 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                 )}
                 {viewTender?.id === tender.id && (
                   <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16, marginTop: 10 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
+                    <div className="mobile-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
                       <div>
                         <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{t('preTender.department')}</div>
                         <div style={{ fontSize: '13.5px', color: '#0b0b0b' }}>{tender.department}</div>

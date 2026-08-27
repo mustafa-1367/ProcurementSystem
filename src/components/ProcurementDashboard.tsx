@@ -80,7 +80,7 @@ export function ProcurementDashboard({
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
+        <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 16 }}>
           <div style={statStyle}>
             <div style={valStyle}>{activeBids}</div>
             <div style={lblStyle}>{t('bidderDash.activeBids')}</div>

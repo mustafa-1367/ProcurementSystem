@@ -235,7 +235,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
           </div>
 
           {/* Step 1 & Step 2 — Two column layout */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="mobile-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {/* Step 1 — Cost estimate & fund confirmation */}
             <div style={{ ...cardStyle, opacity: 1 }}>
               <h2 style={{ margin: '0 0 10px 0', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('preTender.step1Title')}</h2>
@@ -330,7 +330,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                 <Shield style={{ width: 20, height: 20, color: '#0ca30c' }} />
               </div>
               <form onSubmit={handleCreateTender}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+                <div className="mobile-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
                   <div style={{ marginBottom: 13 }}>
                     <label style={labelStyle}>{t('preTender.tenderTitle')}</label>
                     <input

@@ -288,13 +288,13 @@ function AppContent() {
       </header>
 
       {/* ── Tab Strip (Light, sticky below navy bar) ── */}
-      <div className="sticky z-[60]" style={{ top: 64, background: '#fcfcfb', borderBottom: '1px solid rgba(11,11,11,0.10)' }}>
+      <div className="tab-strip-container sticky z-[60]" style={{ top: 64, background: '#fcfcfb', borderBottom: '1px solid rgba(11,11,11,0.10)' }}>
         <div className="max-w-7xl mx-auto" style={{ padding: '0 22px' }}>
           <div
             ref={tablistRef}
             role="tablist"
             aria-label={t('nav.tablistLabel')}
-            className="flex overflow-x-auto" style={{ gap: 2 }}
+            className="tab-strip-scroll flex overflow-x-auto" style={{ gap: 2 }}
           >
             {visibleTabs.map((tab, index) => {
               const isActive = activePhase === tab.id;

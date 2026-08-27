@@ -105,7 +105,7 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
       <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
         <form onSubmit={handleSubmit}>
           {/* 2-column grid for first 4 fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+          <div className="mobile-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
             <div style={formRowStyle}>
               <label style={labelStyle}>{t('register.companyName')}</label>
               <input
