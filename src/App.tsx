@@ -141,7 +141,7 @@ function AppContent() {
 
       {/* ── Top Bar (Navy) ── */}
       <header className="sticky top-0 z-[60]" style={{ background: 'linear-gradient(180deg, #0f2942 0%, #173d61 100%)', boxShadow: '0 2px 10px rgba(0,0,0,.18)' }}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between" style={{ padding: '10px 22px', height: 64 }}>
+        <div className="topbar-inner max-w-7xl mx-auto flex items-center justify-between" style={{ padding: '10px 22px', height: 64 }}>
           {/* Left: Logo + Platform name */}
           <div className="flex items-center" style={{ gap: 11 }}>
             <div className="flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #c99a3c, #e0b658)' }} aria-hidden="true">
@@ -190,8 +190,8 @@ function AppContent() {
           </div>
 
           {/* Right: Role switcher + utilities */}
-          <div className="flex items-center" style={{ gap: 10 }}>
-            <nav aria-label={t('role.switchRole')} className="flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
+          <div className="header-controls flex items-center" style={{ gap: 10 }}>
+            <nav aria-label={t('role.switchRole')} className="role-switch flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
               {roles.map((role) => (
                 <button
                   key={role}
