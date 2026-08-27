@@ -1,14 +1,37 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Shield, CheckCircle, Hash, Clock, FileText, Search, TrendingUp } from 'lucide-react';
+import { Link as LinkIcon, Shield, CheckCircle, Hash, Clock, FileText, Search, TrendingUp, Coins } from 'lucide-react';
 import { blockchain } from '../utils/blockchain';
+import { useTranslation } from '../utils/i18n';
 
 interface BlockchainDashboardProps {
   blockchainRecords: any[];
+  userRole: string;
+  walletBalance: number;
+  setWalletBalance: (v: number) => void;
+  walletTxs: any[];
+  setWalletTxs: (txs: any[]) => void;
 }
 
-export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardProps) {
+export function BlockchainDashboard({ blockchainRecords, userRole, walletBalance, setWalletBalance, walletTxs, setWalletTxs }: BlockchainDashboardProps) {
   const [searchHash, setSearchHash] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [verifiedRecords, setVerifiedRecords] = useState<Set<string>>(new Set());
+  const [rewardNotification, setRewardNotification] = useState<{ id: string; amount: number } | null>(null);
+  const { t } = useTranslation();
+
+  const handleVerify = (recordId: string) => {
+    if (verifiedRecords.has(recordId) || userRole !== 'citizen') return;
+    const reward = 10;
+    const rewardBlock = blockchain.addBlock({ type: 'citizen_verify_reward', recordId, amount: reward, timestamp: Date.now() });
+    setWalletBalance(walletBalance + reward);
+    setWalletTxs([
+      { id: rewardBlock.hash, type: 'reward', label: t('rewards.verifyRecord'), amount: reward, timestamp: Date.now() },
+      ...walletTxs,
+    ]);
+    setVerifiedRecords(new Set([...verifiedRecords, recordId]));
+    setRewardNotification({ id: recordId, amount: reward });
+    setTimeout(() => setRewardNotification(null), 4000);
+  };
 
   const chain = blockchain.getChain();
   const isValid = blockchain.verifyChain();
@@ -31,9 +54,9 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
       case 'contract_awarded':
         return 'bg-green-100 text-green-800';
       case 'payment_processed':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-amber-100 text-amber-900';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 text-gray-900';
     }
   };
 
@@ -57,16 +80,25 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-gray-900">Blockchain Transaction Records</h2>
-        <p className="text-gray-600 mt-1">Immutable ledger of all procurement activities</p>
+        <h2 className="text-gray-900">{t('blockchain.title')}</h2>
+        <p className="text-gray-600 mt-1">{t('blockchain.subtitle')}</p>
       </div>
+
+      {/* Reward Notification */}
+      {rewardNotification && (
+        <div className="bg-green-50 border border-green-300 rounded-lg p-4 flex items-center gap-3">
+          <Coins className="w-5 h-5 text-green-600" />
+          <span className="flex-1 text-green-900 font-semibold">{t('rewards.awarded')}</span>
+          <span className="text-green-800 font-bold text-lg">+{rewardNotification.amount} TOK</span>
+        </div>
+      )}
 
       {/* Blockchain Status */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Total Blocks</p>
+              <p className="text-gray-600">{t('blockchain.totalBlocks')}</p>
               <p className="text-gray-900 mt-1">{chain.length}</p>
             </div>
             <LinkIcon className="w-8 h-8 text-blue-600" />
@@ -76,7 +108,7 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Transactions</p>
+              <p className="text-gray-600">{t('blockchain.transactions')}</p>
               <p className="text-gray-900 mt-1">{blockchainRecords.length}</p>
             </div>
             <Hash className="w-8 h-8 text-purple-600" />
@@ -86,19 +118,19 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Chain Status</p>
-              <p className={`mt-1 ${isValid ? 'text-green-600' : 'text-red-600'}`}>
-                {isValid ? 'Valid' : 'Invalid'}
+              <p className="text-gray-600">{t('blockchain.chainStatus')}</p>
+              <p className={`mt-1 ${isValid ? 'text-green-700' : 'text-red-600'}`}>
+                {isValid ? t('blockchain.valid') : t('blockchain.invalid')}
               </p>
             </div>
-            <Shield className={`w-8 h-8 ${isValid ? 'text-green-600' : 'text-red-600'}`} />
+            <Shield className={`w-8 h-8 ${isValid ? 'text-green-700' : 'text-red-600'}`} />
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Latest Block</p>
+              <p className="text-gray-600">{t('blockchain.latestBlock')}</p>
               <p className="text-gray-900 mt-1">#{chain[chain.length - 1]?.index || 0}</p>
             </div>
             <Clock className="w-8 h-8 text-yellow-600" />
@@ -114,7 +146,7 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
             type="text"
             value={searchHash}
             onChange={(e) => setSearchHash(e.target.value)}
-            placeholder="Search by transaction hash or block ID..."
+            placeholder={t('blockchain.searchPlaceholder')}
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
@@ -123,7 +155,7 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
       {/* Blockchain Visualization */}
       <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
-          <h3 className="text-gray-900">Blockchain Structure</h3>
+          <h3 className="text-gray-900">{t('blockchain.blockchainStructure')}</h3>
         </div>
         <div className="p-6 overflow-x-auto">
           <div className="flex items-center gap-4 min-w-max">
@@ -132,13 +164,13 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
                 <div className="bg-gradient-to-br from-blue-500 to-purple-600 text-white rounded-lg p-4 min-w-[200px]">
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span>Block #{block.index}</span>
+                      <span>{t('blockchain.block')} #{block.index}</span>
                       <Shield className="w-4 h-4" />
                     </div>
-                    <div className="text-xs opacity-90">
-                      <p className="truncate">Hash: {block.hash.substring(0, 16)}...</p>
-                      <p className="truncate">Prev: {block.previousHash.substring(0, 16)}...</p>
-                      <p>Nonce: {block.nonce}</p>
+                    <div className="text-xs">
+                      <p className="truncate">{t('blockchain.hash')} {block.hash.substring(0, 16)}...</p>
+                      <p className="truncate">{t('blockchain.prev')} {block.previousHash.substring(0, 16)}...</p>
+                      <p>{t('blockchain.nonce')} {block.nonce}</p>
                     </div>
                   </div>
                 </div>
@@ -156,12 +188,12 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
 
       {/* Transaction Records */}
       <div className="space-y-4">
-        <h3 className="text-gray-900">Transaction History</h3>
+        <h3 className="text-gray-900">{t('blockchain.transactionHistory')}</h3>
 
         {filteredRecords.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
             <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No transactions recorded yet</p>
+            <p className="text-gray-600">{t('blockchain.noTransactions')}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -169,9 +201,11 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
               .slice()
               .reverse()
               .map((record) => (
-                <div
+                <button
                   key={record.id}
-                  className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                  type="button"
+                  aria-expanded={selectedRecord?.id === record.id}
+                  className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer w-full text-start focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   onClick={() => setSelectedRecord(selectedRecord?.id === record.id ? null : record)}
                 >
                   <div className="p-6">
@@ -185,28 +219,44 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
                             {record.type.replace(/_/g, ' ').toUpperCase()}
                           </span>
                           {record.verified && (
-                            <span className="flex items-center gap-1 text-green-600">
+                            <span className="flex items-center gap-1 text-green-700">
                               <CheckCircle className="w-4 h-4" />
-                              Verified
+                              {t('blockchain.verified')}
+                            </span>
+                          )}
+                          {userRole === 'citizen' && !verifiedRecords.has(record.id) && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleVerify(record.id); }}
+                              className="flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-full text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                            >
+                              <Shield className="w-3.5 h-3.5" />
+                              {t('rewards.verifyBtn')} (+10 TOK)
+                            </button>
+                          )}
+                          {userRole === 'citizen' && verifiedRecords.has(record.id) && (
+                            <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              {t('rewards.citizenVerified')}
                             </span>
                           )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 text-gray-600 mt-3">
                           <div>
-                            <p className="text-gray-500">Transaction Hash</p>
+                            <p className="text-gray-500">{t('blockchain.transactionHash')}</p>
                             <p className="font-mono">{record.transactionHash.substring(0, 32)}...</p>
                           </div>
                           <div>
-                            <p className="text-gray-500">Block ID</p>
+                            <p className="text-gray-500">{t('blockchain.blockId')}</p>
                             <p className="font-mono">{record.id.substring(0, 16)}...</p>
                           </div>
                           <div>
-                            <p className="text-gray-500">Smart Contract</p>
+                            <p className="text-gray-500">{t('blockchain.smartContract')}</p>
                             <p className="font-mono">{record.contractId || 'N/A'}</p>
                           </div>
                           <div>
-                            <p className="text-gray-500">Timestamp</p>
+                            <p className="text-gray-500">{t('blockchain.timestamp')}</p>
                             <p>{new Date(record.timestamp).toLocaleString()}</p>
                           </div>
                         </div>
@@ -216,7 +266,7 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
                     {/* Expanded Details */}
                     {selectedRecord?.id === record.id && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
-                        <h4 className="text-gray-900 mb-3">Full Transaction Details</h4>
+                        <h4 className="text-gray-900 mb-3">{t('blockchain.fullDetails')}</h4>
                         <div className="bg-gray-50 p-4 rounded-lg">
                           <pre className="text-gray-700 overflow-x-auto">
                             {JSON.stringify(
@@ -239,7 +289,7 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
                       </div>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
           </div>
         )}
@@ -248,13 +298,13 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
       {/* Blockchain Integrity Check */}
       <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
         <div className="flex items-center gap-3">
-          <Shield className={`w-8 h-8 ${isValid ? 'text-green-600' : 'text-red-600'}`} />
+          <Shield className={`w-8 h-8 ${isValid ? 'text-green-700' : 'text-red-600'}`} />
           <div>
-            <h3 className="text-gray-900">Blockchain Integrity</h3>
-            <p className={`mt-1 ${isValid ? 'text-green-600' : 'text-red-600'}`}>
+            <h3 className="text-gray-900">{t('blockchain.integrityTitle')}</h3>
+            <p className={`mt-1 ${isValid ? 'text-green-700' : 'text-red-600'}`}>
               {isValid
-                ? 'All blocks are valid and chain integrity is maintained'
-                : 'Chain integrity compromised - blocks have been tampered with'}
+                ? t('blockchain.integrityValid')
+                : t('blockchain.integrityInvalid')}
             </p>
           </div>
         </div>
@@ -262,16 +312,16 @@ export function BlockchainDashboard({ blockchainRecords }: BlockchainDashboardPr
         {isValid && (
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <p className="text-green-800">Hash Validation</p>
-              <p className="text-green-600 mt-1">✓ All hashes verified</p>
+              <p className="text-green-800">{t('blockchain.hashValidation')}</p>
+              <p className="text-green-700 mt-1">✓ {t('blockchain.hashVerified')}</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <p className="text-green-800">Chain Linkage</p>
-              <p className="text-green-600 mt-1">✓ All blocks linked correctly</p>
+              <p className="text-green-800">{t('blockchain.chainLinkage')}</p>
+              <p className="text-green-700 mt-1">✓ {t('blockchain.blocksLinked')}</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-              <p className="text-green-800">Proof of Work</p>
-              <p className="text-green-600 mt-1">✓ Valid mining difficulty</p>
+              <p className="text-green-800">{t('blockchain.proofOfWork')}</p>
+              <p className="text-green-700 mt-1">✓ {t('blockchain.validDifficulty')}</p>
             </div>
           </div>
         )}

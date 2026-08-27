@@ -183,3 +183,19 @@
 html {
   font-size: var(--font-size);
 }
+
+input[type="file"]::file-selector-button {
+  border: 1px solid #c3c2b7;
+  background: #fff;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 13.5px;
+  font-family: inherit;
+  font-weight: 400;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: #f6f5f2;
+}

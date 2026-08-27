@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Award, CheckCircle, DollarSign, Calendar, FileText, TrendingUp, Shield, AlertCircle } from 'lucide-react';
 import { addProcurementRecord } from '../utils/blockchain';
+import { useTranslation } from '../utils/i18n';
 
 interface PostTenderingPhaseProps {
   tenders: any[];
@@ -26,19 +27,38 @@ export function PostTenderingPhase({
   reputationScores,
 }: PostTenderingPhaseProps) {
   const [selectedTender, setSelectedTender] = useState<any>(null);
-  const [evaluationScores, setEvaluationScores] = useState<{ [key: string]: number }>({});
+  const [evaluationScores, setEvaluationScores] = useState<{ [key: string]: string }>({});
+  const [scoreErrors, setScoreErrors] = useState<{ [key: string]: string }>({});
+  const { t } = useTranslation();
 
-  const tendersWithBids = tenders.filter((t) => {
-    const tenderBids = bids.filter((b) => b.tenderId === t.id);
-    return tenderBids.length > 0 && t.status === 'published';
+  const tendersWithBids = tenders.filter((td) => {
+    const tenderBids = bids.filter((b) => b.tenderId === td.id);
+    return tenderBids.length > 0 && td.status === 'published';
   });
 
-  const getTenderBids = (tenderId: string) => {
-    return bids.filter((b) => b.tenderId === tenderId);
+  const getTenderBids = (tenderId: string) => bids.filter((b) => b.tenderId === tenderId);
+
+  const evaluateBid = (bidId: string, value: string) => {
+    setEvaluationScores({ ...evaluationScores, [bidId]: value });
+    setScoreErrors({ ...scoreErrors, [bidId]: '' });
   };
 
-  const evaluateBid = (bidId: string, score: number) => {
-    setEvaluationScores({ ...evaluationScores, [bidId]: score });
+  const validateScore = (bidId: string): number | null => {
+    const value = evaluationScores[bidId] || '';
+    if (!value.trim()) {
+      setScoreErrors({ ...scoreErrors, [bidId]: t('postTender.scoreRequired') });
+      return null;
+    }
+    const num = Number(value);
+    if (isNaN(num) || !Number.isFinite(num) || value.trim() !== String(num)) {
+      setScoreErrors({ ...scoreErrors, [bidId]: t('postTender.scoreNumbersOnly') });
+      return null;
+    }
+    if (num < 0 || num > 100) {
+      setScoreErrors({ ...scoreErrors, [bidId]: t('postTender.scoreRange') });
+      return null;
+    }
+    return num;
   };
 
   const awardContract = (tender: any, bid: any) => {
@@ -61,7 +81,6 @@ export function PostTenderingPhase({
       progress: 0,
     };
 
-    // Add to blockchain
     const { block, contract } = addProcurementRecord('award', {
       tenderId: tender.id,
       bidderId: bid.id,
@@ -80,9 +99,8 @@ export function PostTenderingPhase({
       verified: true,
     };
 
-    // Update tender status
-    const updatedTenders = tenders.map((t) =>
-      t.id === tender.id ? { ...t, status: 'awarded' } : t
+    const updatedTenders = tenders.map((td) =>
+      td.id === tender.id ? { ...td, status: 'awarded' } : td
     );
 
     setContracts([...contracts, newContract]);
@@ -99,7 +117,6 @@ export function PostTenderingPhase({
         );
         const progress = (updatedMilestones.filter((m: any) => m.status === 'paid').length / updatedMilestones.length) * 100;
 
-        // Add payment to blockchain
         const milestone = c.milestones.find((m: any) => m.id === milestoneId);
         const { block, contract } = addProcurementRecord('payment', {
           contractId: c.id,
@@ -136,50 +153,45 @@ export function PostTenderingPhase({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h2 className="text-gray-900">Post-Tendering Phase</h2>
-        <p className="text-gray-600 mt-1">Evaluate bids, award contracts, and manage payments</p>
+        <h2 className="text-gray-900">{t('postTender.title')}</h2>
+        <p className="text-gray-600 mt-1">{t('postTender.subtitle')}</p>
       </div>
 
-      {/* Statistics */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Total Bids</p>
+              <p className="text-gray-600">{t('postTender.totalBids')}</p>
               <p className="text-gray-900 mt-1">{bids.length}</p>
             </div>
             <FileText className="w-8 h-8 text-blue-600" />
           </div>
         </div>
-
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Active Contracts</p>
+              <p className="text-gray-600">{t('postTender.activeContracts')}</p>
               <p className="text-gray-900 mt-1">{contracts.filter((c) => c.status === 'active').length}</p>
             </div>
-            <Award className="w-8 h-8 text-green-600" />
+            <Award className="w-8 h-8 text-green-700" />
           </div>
         </div>
-
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Completed</p>
+              <p className="text-gray-600">{t('postTender.completed')}</p>
               <p className="text-gray-900 mt-1">{contracts.filter((c) => c.status === 'completed').length}</p>
             </div>
             <CheckCircle className="w-8 h-8 text-purple-600" />
           </div>
         </div>
-
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">Total Value</p>
+              <p className="text-gray-600">{t('postTender.totalValue')}</p>
               <p className="text-gray-900 mt-1">
-                {contracts.reduce((sum, c) => sum + Number(c.amount), 0).toLocaleString()} AFN
+                {contracts.reduce((sum, c) => sum + Number(c.amount), 0).toLocaleString()} {t('postTender.afn')}
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-yellow-600" />
@@ -187,32 +199,29 @@ export function PostTenderingPhase({
         </div>
       </div>
 
-      {/* Bid Evaluation Section */}
       <div className="space-y-4">
-        <h3 className="text-gray-900">Bid Evaluation & Contract Award</h3>
-
+        <h3 className="text-gray-900">{t('postTender.bidEvaluation')}</h3>
         {tendersWithBids.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
             <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No tenders with bids available for evaluation</p>
+            <p className="text-gray-600">{t('postTender.noTendersWithBids')}</p>
           </div>
         ) : (
           <div className="grid gap-4">
             {tendersWithBids.map((tender) => {
               const tenderBids = getTenderBids(tender.id);
               const isAwarded = tender.status === 'awarded';
-
               return (
                 <div key={tender.id} className="bg-white rounded-lg shadow-md border border-gray-200">
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div>
                         <h4 className="text-gray-900">{tender.title}</h4>
-                        <p className="text-gray-600 mt-1">{tenderBids.length} bids received</p>
+                        <p className="text-gray-600 mt-1">{tenderBids.length} {t('postTender.bidsReceived')}</p>
                       </div>
                       {isAwarded ? (
-                        <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full">
-                          Contract Awarded
+                        <span className="px-3 py-1 bg-green-100 text-green-900 rounded-full">
+                          {t('postTender.contractAwarded')}
                         </span>
                       ) : (
                         <button
@@ -220,26 +229,25 @@ export function PostTenderingPhase({
                           className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                         >
                           <Award className="w-4 h-4" />
-                          Evaluate & Award
+                          {t('postTender.evaluateAward')}
                         </button>
                       )}
                     </div>
-
                     {selectedTender?.id === tender.id && !isAwarded && (
                       <div className="space-y-3 mt-4 pt-4 border-t border-gray-200">
-                        <h5 className="text-gray-900">Bid Evaluation</h5>
+                        <h5 className="text-gray-900">{t('postTender.bidEvaluationTitle')}</h5>
                         {tenderBids.map((bid) => (
                           <div key={bid.id} className="bg-gray-50 p-4 rounded-lg">
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="text-gray-900">{bid.vendorName}</span>
-                                  <Shield className="w-4 h-4 text-green-600" />
+                                  <Shield className="w-4 h-4 text-green-700" />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-gray-600 mb-3">
                                   <div className="flex items-center gap-2">
                                     <DollarSign className="w-4 h-4" />
-                                    {Number(bid.amount).toLocaleString()} AFN
+                                    {Number(bid.amount).toLocaleString()} {t('postTender.afn')}
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <Calendar className="w-4 h-4" />
@@ -248,37 +256,40 @@ export function PostTenderingPhase({
                                 </div>
                                 <div className="space-y-2">
                                   <div>
-                                    <p className="text-gray-700">Technical Proposal:</p>
+                                    <p className="text-gray-700">{t('postTender.technicalProposal')}</p>
                                     <p className="text-gray-600">{bid.technicalProposal}</p>
                                   </div>
                                   <div>
-                                    <p className="text-gray-700">Experience:</p>
+                                    <p className="text-gray-700">{t('postTender.experience')}</p>
                                     <p className="text-gray-600">{bid.experience}</p>
                                   </div>
                                 </div>
                               </div>
                             </div>
-
                             <div className="flex items-center gap-3">
                               <div className="flex-1">
-                                <label className="block text-gray-700 mb-2">Evaluation Score (0-100)</label>
+                                <label className="block text-gray-700 mb-2">{t('postTender.evaluationScore')}</label>
                                 <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
+                                  type="text"
                                   value={evaluationScores[bid.id] || ''}
-                                  onChange={(e) => evaluateBid(bid.id, Number(e.target.value))}
-                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                  placeholder="Enter score"
+                                  onChange={(e) => evaluateBid(bid.id, e.target.value)}
+                                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${scoreErrors[bid.id] ? 'border-red-500' : 'border-gray-300'}`}
+                                  placeholder={t('postTender.enterScore')}
                                 />
+                                {scoreErrors[bid.id] && (
+                                  <p className="text-red-600 text-sm mt-1">{scoreErrors[bid.id]}</p>
+                                )}
                               </div>
                               <button
-                                onClick={() => awardContract(tender, bid)}
-                                disabled={!evaluationScores[bid.id] || evaluationScores[bid.id] < 70}
-                                className="mt-6 flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                onClick={() => {
+                                  const score = validateScore(bid.id);
+                                  if (score !== null && score >= 70) awardContract(tender, bid);
+                                  else if (score !== null && score < 70) setScoreErrors({ ...scoreErrors, [bid.id]: t('postTender.scoreMinimum') });
+                                }}
+                                className="mt-6 flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                               >
                                 <Award className="w-4 h-4" />
-                                Award Contract
+                                {t('postTender.awardContract')}
                               </button>
                             </div>
                           </div>
@@ -293,14 +304,12 @@ export function PostTenderingPhase({
         )}
       </div>
 
-      {/* Active Contracts */}
       <div className="space-y-4">
-        <h3 className="text-gray-900">Contract Management</h3>
-
+        <h3 className="text-gray-900">{t('postTender.contractManagement')}</h3>
         {contracts.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
             <Award className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No contracts awarded yet</p>
+            <p className="text-gray-600">{t('postTender.noContractsYet')}</p>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -311,23 +320,19 @@ export function PostTenderingPhase({
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h4 className="text-gray-900">{contract.tenderTitle}</h4>
-                        <span
-                          className={`px-3 py-1 rounded-full ${
-                            contract.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-blue-100 text-blue-800'
-                          }`}
-                        >
-                          {contract.status}
+                        <span className={`px-3 py-1 rounded-full ${
+                          contract.status === 'completed' ? 'bg-green-100 text-green-900' : 'bg-blue-100 text-blue-900'
+                        }`}>
+                          {contract.status === 'completed' ? t('postTender.completed') : t('postTender.active')}
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-4 text-gray-600">
                         <div className="flex items-center gap-2">
-                          <span>Vendor: {contract.vendorName}</span>
+                          <span>{t('postTender.vendor')} {contract.vendorName}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <DollarSign className="w-4 h-4" />
-                          {Number(contract.amount).toLocaleString()} AFN
+                          {Number(contract.amount).toLocaleString()} {t('postTender.afn')}
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4" />
@@ -336,36 +341,27 @@ export function PostTenderingPhase({
                       </div>
                     </div>
                   </div>
-
-                  {/* Progress Bar */}
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-gray-700">Overall Progress</span>
+                      <span className="text-gray-700">{t('postTender.overallProgress')}</span>
                       <span className="text-gray-900">{contract.progress}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-green-600 h-2 rounded-full transition-all"
-                        style={{ width: `${contract.progress}%` }}
-                      ></div>
+                      <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${contract.progress}%` }}></div>
                     </div>
                   </div>
-
-                  {/* Milestones */}
                   <div className="space-y-3">
-                    <h5 className="text-gray-900">Payment Milestones</h5>
+                    <h5 className="text-gray-900">{t('postTender.paymentMilestones')}</h5>
                     {contract.milestones.map((milestone: any) => (
                       <div key={milestone.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-gray-900">{milestone.name}</span>
-                            {milestone.status === 'paid' && (
-                              <CheckCircle className="w-4 h-4 text-green-600" />
-                            )}
+                            {milestone.status === 'paid' && <CheckCircle className="w-4 h-4 text-green-700" />}
                           </div>
                           <div className="flex items-center gap-2 text-gray-600">
                             <DollarSign className="w-4 h-4" />
-                            {Number(milestone.amount).toLocaleString()} AFN
+                            {Number(milestone.amount).toLocaleString()} {t('postTender.afn')}
                           </div>
                         </div>
                         {milestone.status === 'pending' ? (
@@ -374,12 +370,12 @@ export function PostTenderingPhase({
                             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                           >
                             <Shield className="w-4 h-4" />
-                            Process Payment
+                            {t('postTender.processPayment')}
                           </button>
                         ) : (
-                          <span className="flex items-center gap-2 text-green-600">
+                          <span className="flex items-center gap-2 text-green-700">
                             <CheckCircle className="w-5 h-5" />
-                            Paid
+                            {t('postTender.paid')}
                           </span>
                         )}
                       </div>
