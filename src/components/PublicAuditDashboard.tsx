@@ -288,15 +288,15 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           wallet_transaction: t('audit.walletTransaction'),
         };
 
-        const typeColors: Record<string, string> = {
-          tender_created: 'bg-blue-100 text-blue-900',
-          tender_published: 'bg-indigo-100 text-indigo-900',
-          bid_submitted: 'bg-purple-100 text-purple-900',
-          contract_awarded: 'bg-green-100 text-green-900',
-          payment_processed: 'bg-amber-100 text-amber-900',
-          dispute_raised: 'bg-red-100 text-red-900',
-          report_submitted: 'bg-orange-100 text-orange-900',
-          wallet_transaction: 'bg-cyan-100 text-cyan-900',
+        const typeStyles: Record<string, { bg: string; color: string; border: string; dot: string; iconBg: string }> = {
+          tender_created:    { bg: '#eef5fd', color: '#1c5cab', border: '#bcd6f5', dot: '#3b82f6', iconBg: '#dbeafe' },
+          tender_published:  { bg: '#eef0fd', color: '#4338ca', border: '#c7d2fe', dot: '#6366f1', iconBg: '#e0e7ff' },
+          bid_submitted:     { bg: '#f3eefe', color: '#7c3aed', border: '#ddd6fe', dot: '#8b5cf6', iconBg: '#ede9fe' },
+          contract_awarded:  { bg: '#eaf8ea', color: '#0a6b0a', border: '#bbf7d0', dot: '#22c55e', iconBg: '#dcfce7' },
+          payment_processed: { bg: '#fef9ee', color: '#92400e', border: '#fde68a', dot: '#f59e0b', iconBg: '#fef3c7' },
+          dispute_raised:    { bg: '#fef2f2', color: '#b91c1c', border: '#fecaca', dot: '#ef4444', iconBg: '#fee2e2' },
+          report_submitted:  { bg: '#fff7ed', color: '#c2410c', border: '#fed7aa', dot: '#f97316', iconBg: '#ffedd5' },
+          wallet_transaction:{ bg: '#ecfeff', color: '#0e7490', border: '#a5f3fc', dot: '#06b6d4', iconBg: '#cffafe' },
         };
 
         const typeIcons: Record<string, typeof FileText> = {
@@ -304,10 +304,10 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           tender_published: FileText,
           bid_submitted: TrendingUp,
           contract_awarded: CheckCircle,
-          payment_processed: LinkIcon,
+          payment_processed: Banknote,
           dispute_raised: Shield,
           report_submitted: Eye,
-          wallet_transaction: Banknote,
+          wallet_transaction: LinkIcon,
         };
 
         const getRecordDetails = (record: any) => {
@@ -352,41 +352,55 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           return true;
         });
 
+        // Group records by date
+        const groupedByDate: Record<string, any[]> = {};
+        filteredRecords.forEach((record) => {
+          const dateKey = new Date(record.timestamp).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+          if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+          groupedByDate[dateKey].push(record);
+        });
+
+        const defaultStyle = typeStyles.tender_created;
+
         return (
-          <div className="bg-white rounded-lg shadow-md border border-gray-200">
+          <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 14, overflow: 'hidden' }}>
             {/* Header */}
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-6 h-6 text-blue-600" />
+            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid #e8e7e4' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(30,58,95,0.25)' }}>
+                    <Clock style={{ width: 22, height: 22, color: '#fff' }} />
+                  </div>
                   <div>
-                    <h3 className="text-gray-900 font-semibold">{t('audit.auditLogTitle')}</h3>
-                    <p className="text-gray-500 text-sm">{t('audit.auditLogSubtitle')}</p>
+                    <h3 style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('audit.auditLogTitle')}</h3>
+                    <p style={{ margin: '2px 0 0', color: '#6e6c66', fontSize: 13 }}>{t('audit.auditLogSubtitle')}</p>
                   </div>
                 </div>
-                <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
-                  {filteredRecords.length} {t('audit.entries')}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ background: 'linear-gradient(135deg, #1e3a5f, #2d5a8e)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
+                    {filteredRecords.length} {t('audit.entries')}
+                  </span>
+                </div>
               </div>
 
               {/* Filters */}
-              <div className="flex gap-3">
-                <div className="flex-1 flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2">
-                  <Search className="w-4 h-4 text-gray-400" />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e1e0d9', borderRadius: 10, padding: '8px 14px', background: '#fff' }}>
+                  <Search style={{ width: 16, height: 16, color: '#9e9d98' }} />
                   <input
                     type="text"
                     value={auditSearch}
                     onChange={(e) => setAuditSearch(e.target.value)}
                     placeholder={t('audit.auditSearchPlaceholder')}
-                    className="flex-1 outline-none text-sm"
+                    style={{ flex: 1, outline: 'none', border: 'none', fontSize: 13, color: '#0b0b0b', background: 'transparent' }}
                   />
                 </div>
-                <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2">
-                  <Filter className="w-4 h-4 text-gray-400" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e1e0d9', borderRadius: 10, padding: '8px 14px', background: '#fff' }}>
+                  <Filter style={{ width: 16, height: 16, color: '#9e9d98' }} />
                   <select
                     value={auditFilter}
                     onChange={(e) => setAuditFilter(e.target.value)}
-                    className="outline-none text-sm bg-transparent"
+                    style={{ outline: 'none', border: 'none', fontSize: 13, color: '#0b0b0b', background: 'transparent', cursor: 'pointer' }}
                   >
                     <option value="all">{t('audit.allActionTypes')}</option>
                     {uniqueTypes.map((type) => (
@@ -399,67 +413,137 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
 
             {/* Log Entries */}
             {filteredRecords.length === 0 ? (
-              <div className="p-12 text-center">
-                <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">{t('audit.noAuditEntries')}</p>
+              <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+                <Clock style={{ width: 48, height: 48, color: '#d1d0cc', margin: '0 auto 12px' }} />
+                <p style={{ color: '#9e9d98', fontSize: 14 }}>{t('audit.noAuditEntries')}</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {filteredRecords.map((record) => {
-                  const details = getRecordDetails(record);
-                  const TypeIcon = typeIcons[record.type] || Shield;
-                  const colorClass = typeColors[record.type] || 'bg-gray-100 text-gray-800';
-
-                  return (
-                    <div key={record.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start gap-4">
-                        {/* Icon */}
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
-                          <TypeIcon className="w-4 h-4" />
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${colorClass}`}>
-                              {typeLabels[record.type] || record.type}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(record.timestamp).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="font-medium text-gray-900">{details.actor}</span>
-                            <span className="text-gray-400">—</span>
-                            <span className="text-gray-600 truncate">{details.detail}</span>
-                          </div>
-                          {/* Transaction Hash */}
-                          {(record.transactionHash || record.hash) && (
-                            <div className="flex items-center gap-2 mt-1">
-                              <code className="text-xs text-gray-400 font-mono">
-                                {(record.transactionHash || record.hash).slice(0, 20)}...
-                              </code>
-                              {record.verified ? (
-                                <span className="flex items-center gap-1 text-xs text-green-700">
-                                  <CheckCircle className="w-3 h-3" />
-                                  {t('audit.verified')}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-xs text-yellow-700">
-                                  <Clock className="w-3 h-3" />
-                                  {t('audit.unverified')}
-                                </span>
-                              )}
-                              {record.onChain && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
+              <div style={{ padding: '8px 0' }}>
+                {Object.entries(groupedByDate).map(([dateLabel, records]) => (
+                  <div key={dateLabel}>
+                    {/* Date Header */}
+                    <div style={{ padding: '16px 28px 8px', position: 'sticky', top: 0, zIndex: 2, background: '#fcfcfb' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                          {dateLabel}
+                        </span>
+                        <div style={{ flex: 1, height: 1, background: '#e8e7e4' }} />
+                        <span style={{ fontSize: 11, color: '#9e9d98', fontWeight: 600 }}>
+                          {records.length} {records.length === 1 ? 'entry' : 'entries'}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+
+                    {/* Timeline entries */}
+                    <div style={{ position: 'relative', paddingLeft: 28 }}>
+                      {/* Vertical timeline line */}
+                      <div style={{ position: 'absolute', left: 48, top: 0, bottom: 0, width: 2, background: 'linear-gradient(180deg, #e1e0d9 0%, #f0efec 100%)' }} />
+
+                      {records.map((record, idx) => {
+                        const details = getRecordDetails(record);
+                        const TypeIcon = typeIcons[record.type] || Shield;
+                        const style = typeStyles[record.type] || defaultStyle;
+                        const time = new Date(record.timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+                        return (
+                          <div
+                            key={record.id}
+                            style={{ position: 'relative', display: 'flex', gap: 20, padding: '10px 28px 10px 0', marginLeft: 0, cursor: 'default', transition: 'background 0.15s' }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#f8f8f6'; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                          >
+                            {/* Timeline dot */}
+                            <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', width: 42, flexShrink: 0 }}>
+                              <div style={{
+                                width: 36, height: 36, borderRadius: 10, background: style.iconBg,
+                                border: `2px solid ${style.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                boxShadow: `0 1px 4px ${style.border}`,
+                              }}>
+                                <TypeIcon style={{ width: 16, height: 16, color: style.color }} />
+                              </div>
+                            </div>
+
+                            {/* Card content */}
+                            <div style={{
+                              flex: 1, minWidth: 0, background: '#fff', borderRadius: 10,
+                              border: '1px solid #e8e7e4', padding: '14px 18px',
+                              transition: 'box-shadow 0.15s, border-color 0.15s',
+                            }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'; (e.currentTarget as HTMLElement).style.borderColor = style.border; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; (e.currentTarget as HTMLElement).style.borderColor = '#e8e7e4'; }}
+                            >
+                              {/* Top row: badge + time */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                                  fontSize: 11.5, fontWeight: 700, padding: '3px 10px',
+                                  borderRadius: 999, border: `1px solid ${style.border}`,
+                                  color: style.color, background: style.bg,
+                                }}>
+                                  {typeLabels[record.type] || record.type}
+                                </span>
+                                <span style={{ fontSize: 12, color: '#9e9d98', fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                                  {time}
+                                </span>
+                              </div>
+
+                              {/* Actor and detail */}
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 14 }}>
+                                <span style={{ fontWeight: 700, color: '#0b0b0b', whiteSpace: 'nowrap' }}>{details.actor}</span>
+                                <span style={{ color: '#c4c3bf' }}>•</span>
+                                <span style={{ color: '#52514e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{details.detail}</span>
+                              </div>
+
+                              {/* Transaction hash + badges */}
+                              {(record.transactionHash || record.hash) && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                                  <div style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    background: '#f5f5f3', borderRadius: 6, padding: '4px 10px',
+                                    border: '1px solid #e8e7e4',
+                                  }}>
+                                    <LinkIcon style={{ width: 12, height: 12, color: '#9e9d98' }} />
+                                    <code style={{ fontSize: 11.5, color: '#6e6c66', fontFamily: '"SF Mono", "Fira Code", monospace', letterSpacing: '-0.02em' }}>
+                                      {(record.transactionHash || record.hash).slice(0, 22)}...
+                                    </code>
+                                  </div>
+                                  {record.verified ? (
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      fontSize: 11, fontWeight: 700, padding: '3px 9px',
+                                      borderRadius: 999, color: '#0a6b0a', background: '#eaf8ea', border: '1px solid #c7ecc7',
+                                    }}>
+                                      <CheckCircle style={{ width: 12, height: 12 }} />
+                                      {t('audit.verified')}
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      fontSize: 11, fontWeight: 700, padding: '3px 9px',
+                                      borderRadius: 999, color: '#8a5a12', background: '#fdf3df', border: '1px solid #f0dcae',
+                                    }}>
+                                      <Clock style={{ width: 12, height: 12 }} />
+                                      {t('audit.unverified')}
+                                    </span>
+                                  )}
+                                  {record.onChain && (
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      fontSize: 11, fontWeight: 700, padding: '3px 9px',
+                                      borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7',
+                                    }}>
+                                      ● On-Chain
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
