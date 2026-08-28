@@ -25,8 +25,40 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     category: '',
     deadline: '',
     requirements: '',
+    procurementType: '',
   });
   const { t } = useTranslation();
+
+  const getMinimumDays = (method: string): { min: number; max: number | null; label: string } => {
+    switch (method) {
+      case 'Single-Source':
+        return { min: 1, max: 7, label: '1–7 days (emergency only)' };
+      case 'Restricted Bidding':
+        return { min: 7, max: 14, label: '7–14 days' };
+      case 'Request for Quotations':
+        return { min: 7, max: null, label: 'Minimum 7 days' };
+      case 'Open Bidding':
+        return { min: 21, max: null, label: 'Minimum 21 days' };
+      case 'QCBS (Consulting)':
+        return { min: 21, max: null, label: 'Minimum 21 days' };
+      default:
+        return { min: 21, max: null, label: 'Minimum 21 days' };
+    }
+  };
+
+  const deadlineRule = getMinimumDays(methodData.method);
+  const todayDate = new Date();
+  const minDeadlineDate = new Date(todayDate.getTime() + deadlineRule.min * 24 * 60 * 60 * 1000);
+  const minDeadlineStr = minDeadlineDate.toISOString().split('T')[0];
+  const maxDeadlineDate = deadlineRule.max ? new Date(todayDate.getTime() + deadlineRule.max * 24 * 60 * 60 * 1000) : null;
+  const maxDeadlineStr = maxDeadlineDate ? maxDeadlineDate.toISOString().split('T')[0] : undefined;
+
+  const deadlineDaysFromNow = formData.deadline
+    ? Math.ceil((new Date(formData.deadline).getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const deadlineTooShort = formData.deadline && deadlineDaysFromNow < deadlineRule.min;
+  const deadlineTooLong = formData.deadline && deadlineRule.max && deadlineDaysFromNow > deadlineRule.max;
+  const deadlineInvalid = deadlineTooShort || deadlineTooLong;
 
   const handleConfirmFund = () => {
     if (!fundData.estimatedValue || !fundData.budgetLine) return;
@@ -48,16 +80,18 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     setMethodSelected(false);
     setFundData({ estimatedValue: '', budgetLine: '' });
     setMethodData({ method: 'Open Bidding', singleSourceJustification: '' });
-    setFormData({ title: '', description: '', department: '', budget: '', category: '', deadline: '', requirements: '' });
+    setFormData({ title: '', description: '', department: '', budget: '', category: '', deadline: '', requirements: '', procurementType: '' });
   };
 
   const handleCreateTender = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (deadlineInvalid) return;
 
     const newTender = {
       id: `TND-${Date.now()}`,
       ...formData,
       method: methodData.method,
+      procurementType: formData.procurementType,
       budgetLine: fundData.budgetLine,
       status: 'draft',
       createdAt: new Date().toISOString(),
@@ -367,12 +401,52 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                     </select>
                   </div>
                   <div style={{ marginBottom: 13 }}>
+                    <label style={labelStyle}>{t('preTender.procurementType')}</label>
+                    <select
+                      required value={formData.procurementType}
+                      onChange={(e) => setFormData({ ...formData, procurementType: e.target.value })}
+                      style={inputStyle}
+                    >
+                      <option value="">{t('preTender.selectProcurementType')}</option>
+                      <option value="Goods">{t('preTender.procurementTypes.goods')}</option>
+                      <option value="Works">{t('preTender.procurementTypes.works')}</option>
+                      <option value="Services">{t('preTender.procurementTypes.services')}</option>
+                    </select>
+                    <div style={hintStyle}>{t('preTender.procurementTypeHint')}</div>
+                  </div>
+                  <div style={{ marginBottom: 13 }}>
                     <label style={labelStyle}>{t('preTender.submissionDeadline')}</label>
                     <input
                       type="date" required value={formData.deadline}
+                      min={minDeadlineStr}
+                      max={maxDeadlineStr}
                       onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-                      style={inputStyle}
+                      style={{ ...inputStyle, borderColor: deadlineInvalid ? '#dc2626' : '#c3c2b7' }}
                     />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+                      <span style={{
+                        fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                        background: deadlineInvalid ? '#fee2e2' : '#ede9fe',
+                        color: deadlineInvalid ? '#991b1b' : '#5b21b6',
+                      }}>
+                        {methodData.method}: {deadlineRule.label}
+                      </span>
+                      {formData.deadline && !deadlineInvalid && (
+                        <span style={{ fontSize: '11px', color: '#065f46', fontWeight: 600 }}>
+                          {deadlineDaysFromNow} days from today
+                        </span>
+                      )}
+                    </div>
+                    {deadlineTooShort && (
+                      <div style={{ fontSize: '11.5px', color: '#dc2626', marginTop: 3, fontWeight: 600 }}>
+                        Deadline too short — {methodData.method} requires at least {deadlineRule.min} days per procurement law.
+                      </div>
+                    )}
+                    {deadlineTooLong && (
+                      <div style={{ fontSize: '11.5px', color: '#dc2626', marginTop: 3, fontWeight: 600 }}>
+                        Deadline exceeds maximum — {methodData.method} allows up to {deadlineRule.max} days per procurement law.
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ marginBottom: 13 }}>
@@ -396,8 +470,9 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                 <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
                   <button
                     type="submit"
-                    style={btnPrimary}
-                    onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#173d61'; }}
+                    disabled={!!deadlineInvalid}
+                    style={{ ...btnPrimary, opacity: deadlineInvalid ? 0.5 : 1, cursor: deadlineInvalid ? 'not-allowed' : 'pointer' }}
+                    onMouseEnter={(e) => { if (!deadlineInvalid) (e.target as HTMLElement).style.background = '#173d61'; }}
                     onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#0f2942'; }}
                   >
                     <CheckCircle style={{ width: 16, height: 16 }} />

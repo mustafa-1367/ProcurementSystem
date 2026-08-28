@@ -13,6 +13,7 @@ interface RegisterKYCProps {
 
 export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole, registeredSuppliers, setRegisteredSuppliers }: RegisterKYCProps) {
   const { t } = useTranslation();
+  const [successInfo, setSuccessInfo] = useState<{ companyName: string; supplierId: string; onChain: boolean } | null>(null);
   const [form, setForm] = useState({
     companyName: '',
     registrationNumber: '',
@@ -20,6 +21,9 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
     email: '',
     taxId: '',
     beneficialOwnership: '',
+    bidSecurityAttached: false,
+    auditedFinancials: false,
+    antiCorruptionDeclaration: false,
   });
 
   const registered = registeredSuppliers.some(
@@ -54,6 +58,9 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
         taxClearance: !!form.taxId,
         notDebarred: true,
         noConflictOfInterest: true,
+        bidSecurity: form.bidSecurityAttached,
+        auditedFinancials: form.auditedFinancials,
+        antiCorruptionDeclaration: form.antiCorruptionDeclaration,
       },
     };
 
@@ -78,6 +85,11 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
     }
 
     setRegisteredSuppliers([...registeredSuppliers, newSupplier]);
+    setSuccessInfo({ companyName: form.companyName, supplierId: newSupplier.id, onChain });
+    setForm({
+      companyName: '', registrationNumber: '', representative: '', email: '',
+      taxId: '', beneficialOwnership: '', bidSecurityAttached: false, auditedFinancials: false, antiCorruptionDeclaration: false,
+    });
   };
 
   const inputStyle: React.CSSProperties = {
@@ -123,6 +135,9 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
                       <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 999, background: sup.checks?.businessRegistration ? '#d1fae5' : '#fee2e2', color: sup.checks?.businessRegistration ? '#065f46' : '#991b1b' }}>Registration {sup.checks?.businessRegistration ? '✓' : '✗'}</span>
                       <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 999, background: sup.checks?.taxClearance ? '#d1fae5' : '#fef3c7', color: sup.checks?.taxClearance ? '#065f46' : '#92400e' }}>Tax {sup.checks?.taxClearance ? '✓' : '—'}</span>
                       <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 999, background: '#d1fae5', color: '#065f46' }}>Not Debarred ✓</span>
+                      <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 999, background: sup.checks?.bidSecurity ? '#d1fae5' : '#fef3c7', color: sup.checks?.bidSecurity ? '#065f46' : '#92400e' }}>Bid Security {sup.checks?.bidSecurity ? '✓' : '—'}</span>
+                      <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 999, background: sup.checks?.auditedFinancials ? '#d1fae5' : '#fef3c7', color: sup.checks?.auditedFinancials ? '#065f46' : '#92400e' }}>Financials {sup.checks?.auditedFinancials ? '✓' : '—'}</span>
+                      <span style={{ fontSize: '10px', padding: '2px 6px', borderRadius: 999, background: sup.checks?.antiCorruptionDeclaration ? '#d1fae5' : '#fef3c7', color: sup.checks?.antiCorruptionDeclaration ? '#065f46' : '#92400e' }}>Anti-Corruption {sup.checks?.antiCorruptionDeclaration ? '✓' : '—'}</span>
                     </div>
                   </td>
                   <td style={{ padding: '8px 10px', borderBottom: idx === registeredSuppliers.length - 1 ? 'none' : '1px solid #e1e0d9', fontSize: '12px', color: '#6e6c66' }}>{new Date(sup.registeredAt).toLocaleDateString()}</td>
@@ -130,6 +145,38 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Success Confirmation */}
+      {successInfo && (
+        <div style={{ background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 10, padding: 18, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <CheckCircle style={{ width: 24, height: 24, color: '#065f46', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 16, color: '#065f46' }}>Registration Successful</h3>
+            <p style={{ margin: '0 0 8px 0', fontSize: 14, color: '#047857' }}>
+              <strong>{successInfo.companyName}</strong> has been registered and verified successfully.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                ID: {successInfo.supplierId}
+              </span>
+              {successInfo.onChain && (
+                <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  ● Recorded On-Chain
+                </span>
+              )}
+              <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
+                Eligibility Verified
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => setSuccessInfo(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280', padding: 4 }}
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -207,6 +254,49 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
             <div style={hintStyle}>{t('register.beneficialHint')}</div>
           </div>
 
+          {/* Additional Eligibility Checks (Art. 17) */}
+          <div style={{ ...formRowStyle, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14 }}>
+            <div style={{ ...labelStyle, fontSize: '13px', marginBottom: 10 }}>Additional Eligibility Checks (Art. 17)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
+                <input
+                  type="checkbox"
+                  checked={form.bidSecurityAttached}
+                  onChange={(e) => setForm({ ...form, bidSecurityAttached: e.target.checked })}
+                  style={{ accentColor: '#0f2942' }}
+                />
+                <div>
+                  <span style={{ fontWeight: 600 }}>Bid Security / Guarantee</span>
+                  <div style={hintStyle}>Bank guarantee or bid bond as required by tender documents</div>
+                </div>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
+                <input
+                  type="checkbox"
+                  checked={form.auditedFinancials}
+                  onChange={(e) => setForm({ ...form, auditedFinancials: e.target.checked })}
+                  style={{ accentColor: '#0f2942' }}
+                />
+                <div>
+                  <span style={{ fontWeight: 600 }}>Audited Financial Statements</span>
+                  <div style={hintStyle}>Last 3 years of audited financial statements available</div>
+                </div>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
+                <input
+                  type="checkbox"
+                  checked={form.antiCorruptionDeclaration}
+                  onChange={(e) => setForm({ ...form, antiCorruptionDeclaration: e.target.checked })}
+                  style={{ accentColor: '#0f2942' }}
+                />
+                <div>
+                  <span style={{ fontWeight: 600 }}>Anti-Corruption Declaration</span>
+                  <div style={hintStyle}>Signed declaration of compliance with anti-corruption laws</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
           {/* Supporting documents */}
           <div style={formRowStyle}>
             <label style={labelStyle}>{t('register.documents')}</label>
@@ -239,6 +329,9 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
             { label: 'Tax Clearance Certificate', desc: 'Up-to-date tax payments confirmed' },
             { label: 'Not Debarred', desc: 'Not on NPA debarment list' },
             { label: 'No Conflict of Interest', desc: 'No affiliation with procuring entity staff' },
+            { label: 'Bid Security / Guarantee', desc: 'Bank guarantee or bid bond per tender requirements' },
+            { label: 'Audited Financial Statements', desc: 'Last 3 years of audited financials' },
+            { label: 'Anti-Corruption Declaration', desc: 'Signed compliance declaration' },
           ].map((item) => (
             <div key={item.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: '#0f2942', marginBottom: 2 }}>{item.label}</div>

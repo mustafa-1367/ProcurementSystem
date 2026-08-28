@@ -278,8 +278,8 @@ export function DAOGovernance({
     }
   };
 
-  const activeDisputes = disputes.filter((d) => d.status === 'voting');
-  const resolvedDisputes = disputes.filter((d) => d.status === 'resolved');
+  const activeDisputes = disputes.filter((d) => d.status === 'voting' && d.votes);
+  const resolvedDisputes = disputes.filter((d) => d.status === 'resolved' && d.resolution);
 
   return (
     <div className="space-y-6">
@@ -621,8 +621,8 @@ export function DAOGovernance({
             <div>
               <p className="text-gray-600">{t('dao.participationRate')}</p>
               <p className="text-gray-900 mt-1">
-                {disputes.length > 0 
-                  ? Math.round((disputes.reduce((sum, d) => sum + d.votes.totalVoters, 0) / disputes.length))
+                {disputes.length > 0
+                  ? Math.round((disputes.reduce((sum, d) => sum + (d.votes?.totalVoters || 0), 0) / disputes.length))
                   : 0}
               </p>
             </div>
@@ -978,7 +978,7 @@ export function DAOGovernance({
                       </div>
                       <div>
                         <p className="text-gray-500">{t('dao.approvalRate')}</p>
-                        <p>{dispute.resolution.approvalRate.toFixed(1)}%</p>
+                        <p>{dispute.resolution?.approvalRate?.toFixed(1) || 0}%</p>
                       </div>
                       <div>
                         <p className="text-gray-500">{t('dao.resolved')}</p>

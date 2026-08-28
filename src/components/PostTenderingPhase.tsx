@@ -24,9 +24,15 @@ interface EvalDatum {
   docsComplete: boolean;
   bidSecurity: boolean;
   meetsRequirements: boolean;
+  qualificationPass: boolean;
+  experienceYears: number;
+  staffQualified: boolean;
+  equipmentAvailable: boolean;
   technicalScore: number;
   financialScore: number;
   combinedScore: number;
+  isDomestic: boolean;
+  domesticPreference: number;
 }
 
 const cardStyle: React.CSSProperties = {
@@ -57,7 +63,7 @@ const badgeStyle: React.CSSProperties = {
 
 const GOLD = '#c99a3c';
 
-const STAGE_LABELS = ['Preliminary Check', 'Technical Evaluation', 'Financial Evaluation', 'Combined Score & Ranking'];
+const STAGE_LABELS = ['Preliminary & Qualification', 'Technical Evaluation', 'Financial Evaluation', 'Combined Score & Ranking'];
 
 function StandstillCountdown({ endDate }: { endDate: string }) {
   const [remaining, setRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: false });
@@ -208,9 +214,15 @@ export function PostTenderingPhase({
       docsComplete: false,
       bidSecurity: false,
       meetsRequirements: false,
+      qualificationPass: false,
+      experienceYears: 0,
+      staffQualified: false,
+      equipmentAvailable: false,
       technicalScore: 0,
       financialScore: 0,
       combinedScore: 0,
+      isDomestic: false,
+      domesticPreference: 0,
     };
   };
 
@@ -231,22 +243,43 @@ export function PostTenderingPhase({
   };
 
   const computeCombinedScores = (tenderId: string) => {
+    const tender = tenders.find((td) => td.id === tenderId);
+    const procType = tender?.procurementType || 'Goods';
     const tenderBids = getTenderBids(tenderId);
     const updated = { ...evalData };
-    tenderBids.forEach((bid) => {
-      const datum = updated[bid.id] || getEvalDatum(bid.id);
-      if (datum.preliminaryPass) {
-        datum.combinedScore = Math.round((datum.technicalScore * 0.7 + datum.financialScore * 0.3) * 100) / 100;
-      }
-      updated[bid.id] = datum;
-    });
+
+    if (procType === 'Services') {
+      // QCBS: 70% technical + 30% financial (Art. 44)
+      tenderBids.forEach((bid) => {
+        const datum = updated[bid.id] || getEvalDatum(bid.id);
+        if (datum.preliminaryPass && datum.qualificationPass) {
+          const adjustedFinancial = datum.financialScore + datum.domesticPreference;
+          datum.combinedScore = Math.round((datum.technicalScore * 0.7 + Math.min(100, adjustedFinancial) * 0.3) * 100) / 100;
+        }
+        updated[bid.id] = datum;
+      });
+    } else {
+      // Goods/Works: Lowest Evaluated Bid — use financial as primary, technical as qualifier
+      // Financial score is inverse of price (lower price = higher score), with domestic preference
+      tenderBids.forEach((bid) => {
+        const datum = updated[bid.id] || getEvalDatum(bid.id);
+        if (datum.preliminaryPass && datum.qualificationPass) {
+          const adjustedFinancial = datum.financialScore + datum.domesticPreference;
+          datum.combinedScore = Math.round((datum.technicalScore * 0.3 + Math.min(100, adjustedFinancial) * 0.7) * 100) / 100;
+        }
+        updated[bid.id] = datum;
+      });
+    }
     setEvalData(updated);
   };
 
   const getRankedBids = (tenderId: string) => {
     const tenderBids = getTenderBids(tenderId);
     return tenderBids
-      .filter((bid) => getEvalDatum(bid.id).preliminaryPass)
+      .filter((bid) => {
+        const d = getEvalDatum(bid.id);
+        return d.preliminaryPass && d.qualificationPass;
+      })
       .sort((a, b) => getEvalDatum(b.id).combinedScore - getEvalDatum(a.id).combinedScore);
   };
 
@@ -548,16 +581,15 @@ export function PostTenderingPhase({
 
   const renderStage1 = (tender: any) => {
     const tenderBids = getTenderBids(tender.id);
-    const allChecked = tenderBids.every((bid) => {
-      const datum = getEvalDatum(bid.id);
-      return datum.preliminaryPass || (!datum.docsComplete && !datum.bidSecurity && !datum.meetsRequirements);
-    });
 
     return (
       <div>
-        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 12 }}>
-          Stage 1: Preliminary Check
+        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 4 }}>
+          Stage 1: Preliminary Check & Qualification
         </h5>
+        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
+          Preliminary checks are pass/fail eligibility gates. Qualification assesses bidder capacity (also pass/fail) — separate from technical scoring.
+        </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {tenderBids.map((bid) => {
             const datum = getEvalDatum(bid.id);
@@ -565,40 +597,87 @@ export function PostTenderingPhase({
               <div key={bid.id} style={{ ...cardStyle, opacity: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <span style={{ fontWeight: 700, color: '#0f2942', fontSize: '14px' }}>{bid.vendorName}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                      {Number(bid.amount).toLocaleString()} AFN
+                  <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                    {Number(bid.amount).toLocaleString()} AFN
+                  </span>
+                </div>
+
+                {/* Preliminary Checks */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Preliminary Checks (Eligibility)</div>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 6 }}>
+                    {[
+                      { key: 'docsComplete' as const, label: 'Documents complete' },
+                      { key: 'bidSecurity' as const, label: 'Bid security attached' },
+                      { key: 'meetsRequirements' as const, label: 'Meets basic requirements' },
+                    ].map((item) => (
+                      <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
+                        <input
+                          type="checkbox"
+                          checked={datum[item.key]}
+                          onChange={(e) => updateEvalDatum(bid.id, { [item.key]: e.target.checked })}
+                          style={{ accentColor: '#0f2942' }}
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={datum.preliminaryPass}
+                      onChange={(e) => updateEvalDatum(bid.id, { preliminaryPass: e.target.checked })}
+                      style={{ accentColor: '#065f46' }}
+                    />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: datum.preliminaryPass ? '#065f46' : '#dc2626' }}>
+                      {datum.preliminaryPass ? 'Preliminary: Pass' : 'Preliminary: Fail'}
                     </span>
+                  </label>
+                </div>
+
+                {/* Qualification Assessment (separate from scoring) */}
+                {datum.preliminaryPass && (
+                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Qualification Assessment (Pass/Fail)</div>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 6 }}>
+                      {[
+                        { key: 'staffQualified' as const, label: 'Key staff qualified' },
+                        { key: 'equipmentAvailable' as const, label: 'Equipment/resources available' },
+                      ].map((item) => (
+                        <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
+                          <input
+                            type="checkbox"
+                            checked={datum[item.key]}
+                            onChange={(e) => updateEvalDatum(bid.id, { [item.key]: e.target.checked })}
+                            style={{ accentColor: '#0f2942' }}
+                          />
+                          {item.label}
+                        </label>
+                      ))}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: '#374151' }}>
+                        <label>Experience (years):</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={datum.experienceYears || ''}
+                          onChange={(e) => updateEvalDatum(bid.id, { experienceYears: Number(e.target.value) })}
+                          style={{ width: 60, padding: '4px 8px', border: '1px solid rgba(11,11,11,0.15)', borderRadius: 6, fontSize: '13px' }}
+                        />
+                      </div>
+                    </div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                       <input
                         type="checkbox"
-                        checked={datum.preliminaryPass}
-                        onChange={(e) => updateEvalDatum(bid.id, { preliminaryPass: e.target.checked })}
+                        checked={datum.qualificationPass}
+                        onChange={(e) => updateEvalDatum(bid.id, { qualificationPass: e.target.checked })}
                         style={{ accentColor: '#065f46' }}
                       />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: datum.preliminaryPass ? '#065f46' : '#dc2626' }}>
-                        {datum.preliminaryPass ? 'Pass' : 'Fail'}
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: datum.qualificationPass ? '#065f46' : '#dc2626' }}>
+                        {datum.qualificationPass ? 'Qualification: Pass' : 'Qualification: Fail'}
                       </span>
                     </label>
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                  {[
-                    { key: 'docsComplete' as const, label: 'Documents complete' },
-                    { key: 'bidSecurity' as const, label: 'Bid security attached' },
-                    { key: 'meetsRequirements' as const, label: 'Meets basic requirements' },
-                  ].map((item) => (
-                    <label key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '13px', color: '#374151' }}>
-                      <input
-                        type="checkbox"
-                        checked={datum[item.key]}
-                        onChange={(e) => updateEvalDatum(bid.id, { [item.key]: e.target.checked })}
-                        style={{ accentColor: '#0f2942' }}
-                      />
-                      {item.label}
-                    </label>
-                  ))}
-                </div>
+                )}
               </div>
             );
           })}
@@ -612,24 +691,70 @@ export function PostTenderingPhase({
     );
   };
 
+  const getTechnicalCriteria = (procurementType: string) => {
+    switch (procurementType) {
+      case 'Services':
+        return [
+          { label: 'Relevant Experience (25%)', weight: 25 },
+          { label: 'Methodology & Approach (40%)', weight: 40 },
+          { label: 'Key Personnel Qualifications (35%)', weight: 35 },
+        ];
+      case 'Works':
+        return [
+          { label: 'Construction Methodology', weight: 30 },
+          { label: 'Equipment & Machinery', weight: 25 },
+          { label: 'Key Personnel & Staffing', weight: 25 },
+          { label: 'Work Schedule & Timeline', weight: 20 },
+        ];
+      default: // Goods
+        return [
+          { label: 'Specification Compliance', weight: 40 },
+          { label: 'Delivery Schedule', weight: 30 },
+          { label: 'Warranty & After-Sales Support', weight: 30 },
+        ];
+    }
+  };
+
   const renderStage2 = (tender: any) => {
     const tenderBids = getTenderBids(tender.id);
-    const passingBids = tenderBids.filter((bid) => getEvalDatum(bid.id).preliminaryPass);
-    const failedBids = tenderBids.filter((bid) => !getEvalDatum(bid.id).preliminaryPass);
+    const qualifiedBids = tenderBids.filter((bid) => {
+      const d = getEvalDatum(bid.id);
+      return d.preliminaryPass && d.qualificationPass;
+    });
+    const failedBids = tenderBids.filter((bid) => {
+      const d = getEvalDatum(bid.id);
+      return !d.preliminaryPass || !d.qualificationPass;
+    });
+    const procType = tender.procurementType || 'Goods';
+    const criteria = getTechnicalCriteria(procType);
 
     return (
       <div>
-        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 12 }}>
+        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 4 }}>
           Stage 2: Technical Evaluation
         </h5>
+        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
+          Criteria for <strong>{procType}</strong> procurement
+          {procType === 'Services' ? ' (QCBS — Art. 44)' : ' (Lowest Evaluated Bid — Art. 43)'}
+        </p>
+
+        {/* Criteria breakdown info */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+          {criteria.map((c) => (
+            <span key={c.label} style={{ fontSize: '11px', padding: '3px 8px', borderRadius: 999, background: '#ede9fe', color: '#5b21b6', fontWeight: 600 }}>
+              {c.label}
+            </span>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {passingBids.map((bid) => {
+          {qualifiedBids.map((bid) => {
             const datum = getEvalDatum(bid.id);
             return (
               <div key={bid.id} style={cardStyle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ fontWeight: 700, color: '#0f2942', fontSize: '14px' }}>{bid.vendorName}</span>
-                  <span style={{ ...badgeStyle, background: '#d1fae5', color: '#065f46' }}>Passed Preliminary</span>
+                  <span style={{ ...badgeStyle, background: '#d1fae5', color: '#065f46' }}>Qualified</span>
                 </div>
                 <div style={{ marginBottom: 6 }}>
                   <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 2 }}>Technical Proposal: {bid.technicalProposal}</p>
@@ -655,14 +780,18 @@ export function PostTenderingPhase({
               </div>
             );
           })}
-          {failedBids.map((bid) => (
-            <div key={bid.id} style={{ ...cardStyle, opacity: 0.45 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: '#6b7280', fontSize: '14px' }}>{bid.vendorName}</span>
-                <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>Failed Preliminary</span>
+          {failedBids.map((bid) => {
+            const d = getEvalDatum(bid.id);
+            const reason = !d.preliminaryPass ? 'Failed Preliminary' : 'Failed Qualification';
+            return (
+              <div key={bid.id} style={{ ...cardStyle, opacity: 0.45 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, color: '#6b7280', fontSize: '14px' }}>{bid.vendorName}</span>
+                  <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>{reason}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
           <button style={navyBtnStyle} onClick={() => advanceStage(tender.id)}>
@@ -675,16 +804,29 @@ export function PostTenderingPhase({
 
   const renderStage3 = (tender: any) => {
     const tenderBids = getTenderBids(tender.id);
-    const passingBids = tenderBids.filter((bid) => getEvalDatum(bid.id).preliminaryPass);
-    const failedBids = tenderBids.filter((bid) => !getEvalDatum(bid.id).preliminaryPass);
+    const qualifiedBids = tenderBids.filter((bid) => {
+      const d = getEvalDatum(bid.id);
+      return d.preliminaryPass && d.qualificationPass;
+    });
+    const failedBids = tenderBids.filter((bid) => {
+      const d = getEvalDatum(bid.id);
+      return !d.preliminaryPass || !d.qualificationPass;
+    });
+    const procType = tender.procurementType || 'Goods';
 
     return (
       <div>
-        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 12 }}>
+        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 4 }}>
           Stage 3: Financial Evaluation
         </h5>
+        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
+          {procType === 'Services'
+            ? 'Financial weight: 30% (QCBS method per Art. 44)'
+            : 'Financial weight: 70% (Lowest Evaluated Bid per Art. 43)'}
+          {' — Domestic firms may receive a 25% price preference.'}
+        </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {passingBids.map((bid) => {
+          {qualifiedBids.map((bid) => {
             const datum = getEvalDatum(bid.id);
             const budgetStr = tender.budget ? `${Number(tender.budget).toLocaleString()} AFN` : 'N/A';
             const bidAmountNum = Number(bid.amount);
@@ -696,7 +838,7 @@ export function PostTenderingPhase({
                   <span style={{ fontWeight: 700, color: '#0f2942', fontSize: '14px' }}>{bid.vendorName}</span>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>Technical: {datum.technicalScore}/100</span>
                 </div>
-                <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '13px' }}>
+                <div style={{ display: 'flex', gap: 16, marginBottom: 10, fontSize: '13px', flexWrap: 'wrap' }}>
                   <div>
                     <span style={{ color: '#6b7280' }}>Bid Amount: </span>
                     <span style={{ fontWeight: 600, color: '#0f2942' }}>{bidAmountNum.toLocaleString()} AFN</span>
@@ -711,34 +853,58 @@ export function PostTenderingPhase({
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Financial Score (0-100):</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={datum.financialScore || ''}
-                    onChange={(e) => updateEvalDatum(bid.id, { financialScore: Math.min(100, Math.max(0, Number(e.target.value))) })}
-                    style={{
-                      width: 80,
-                      padding: '6px 10px',
-                      border: '1px solid rgba(11,11,11,0.15)',
-                      borderRadius: 6,
-                      fontSize: '13px',
-                    }}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Financial Score (0-100):</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={datum.financialScore || ''}
+                      onChange={(e) => updateEvalDatum(bid.id, { financialScore: Math.min(100, Math.max(0, Number(e.target.value))) })}
+                      style={{
+                        width: 80,
+                        padding: '6px 10px',
+                        border: '1px solid rgba(11,11,11,0.15)',
+                        borderRadius: 6,
+                        fontSize: '13px',
+                      }}
+                    />
+                  </div>
+                  {/* 25% Domestic Preference */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '13px', color: '#374151', background: datum.isDomestic ? '#fefce8' : 'transparent', padding: '4px 10px', borderRadius: 6, border: datum.isDomestic ? '1px solid #fcd34d' : '1px solid transparent' }}>
+                    <input
+                      type="checkbox"
+                      checked={datum.isDomestic}
+                      onChange={(e) => updateEvalDatum(bid.id, {
+                        isDomestic: e.target.checked,
+                        domesticPreference: e.target.checked ? 25 : 0,
+                      })}
+                      style={{ accentColor: GOLD }}
+                    />
+                    <span style={{ fontWeight: 600 }}>Domestic Firm (+25%)</span>
+                  </label>
+                  {datum.isDomestic && (
+                    <span style={{ ...badgeStyle, background: '#fef3c7', color: '#92400e', fontSize: '11px' }}>
+                      +25% preference applied
+                    </span>
+                  )}
                 </div>
               </div>
             );
           })}
-          {failedBids.map((bid) => (
-            <div key={bid.id} style={{ ...cardStyle, opacity: 0.45 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: '#6b7280', fontSize: '14px' }}>{bid.vendorName}</span>
-                <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>Failed Preliminary</span>
+          {failedBids.map((bid) => {
+            const d = getEvalDatum(bid.id);
+            const reason = !d.preliminaryPass ? 'Failed Preliminary' : 'Failed Qualification';
+            return (
+              <div key={bid.id} style={{ ...cardStyle, opacity: 0.45 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, color: '#6b7280', fontSize: '14px' }}>{bid.vendorName}</span>
+                  <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>{reason}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
           <button
@@ -757,22 +923,34 @@ export function PostTenderingPhase({
 
   const renderStage4 = (tender: any) => {
     const ranked = getRankedBids(tender.id);
-    const failedBids = getTenderBids(tender.id).filter((bid) => !getEvalDatum(bid.id).preliminaryPass);
+    const failedBids = getTenderBids(tender.id).filter((bid) => {
+      const d = getEvalDatum(bid.id);
+      return !d.preliminaryPass || !d.qualificationPass;
+    });
     const reportExists = reports.some((r) => r.tenderId === tender.id && r.type === 'evaluation_report');
+    const procType = tender.procurementType || 'Goods';
+    const isServices = procType === 'Services';
+    const techWeight = isServices ? '70%' : '30%';
+    const finWeight = isServices ? '30%' : '70%';
 
     return (
       <div>
-        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 12 }}>
+        <h5 style={{ fontSize: '14px', fontWeight: 700, color: '#0f2942', marginBottom: 4 }}>
           Stage 4: Combined Score & Ranking
         </h5>
+        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
+          {isServices
+            ? 'QCBS method: Technical 70% + Financial 30% (Art. 44)'
+            : 'Lowest Evaluated Bid: Technical 30% + Financial 70% (Art. 43)'}
+        </p>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
                 <th style={{ textAlign: 'left', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Rank</th>
                 <th style={{ textAlign: 'left', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Vendor</th>
-                <th style={{ textAlign: 'right', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Technical (70%)</th>
-                <th style={{ textAlign: 'right', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Financial (30%)</th>
+                <th style={{ textAlign: 'right', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Technical ({techWeight})</th>
+                <th style={{ textAlign: 'right', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Financial ({finWeight})</th>
                 <th style={{ textAlign: 'right', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Combined</th>
                 <th style={{ textAlign: 'center', padding: '8px 10px', color: '#6b7280', fontWeight: 600 }}>Action</th>
               </tr>
@@ -793,11 +971,16 @@ export function PostTenderingPhase({
                       #{idx + 1}
                     </td>
                     <td style={{ padding: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, color: '#0f2942' }}>{bid.vendorName}</span>
                         {isWinner && (
                           <span style={{ ...badgeStyle, background: GOLD, color: '#fff' }}>
                             Recommended Winner
+                          </span>
+                        )}
+                        {datum.isDomestic && (
+                          <span style={{ ...badgeStyle, background: '#fef3c7', color: '#92400e', fontSize: '10px' }}>
+                            Domestic +25%
                           </span>
                         )}
                       </div>
@@ -822,18 +1005,22 @@ export function PostTenderingPhase({
                   </tr>
                 );
               })}
-              {failedBids.map((bid) => (
-                <tr key={bid.id} style={{ borderBottom: '1px solid #f3f4f6', opacity: 0.4 }}>
-                  <td style={{ padding: '10px', color: '#9ca3af' }}>-</td>
-                  <td style={{ padding: '10px', color: '#9ca3af' }}>{bid.vendorName}</td>
-                  <td style={{ padding: '10px', textAlign: 'right', color: '#9ca3af' }}>-</td>
-                  <td style={{ padding: '10px', textAlign: 'right', color: '#9ca3af' }}>-</td>
-                  <td style={{ padding: '10px', textAlign: 'right', color: '#9ca3af' }}>-</td>
-                  <td style={{ padding: '10px', textAlign: 'center' }}>
-                    <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>Disqualified</span>
-                  </td>
-                </tr>
-              ))}
+              {failedBids.map((bid) => {
+                const d = getEvalDatum(bid.id);
+                const reason = !d.preliminaryPass ? 'Failed Preliminary' : 'Failed Qualification';
+                return (
+                  <tr key={bid.id} style={{ borderBottom: '1px solid #f3f4f6', opacity: 0.4 }}>
+                    <td style={{ padding: '10px', color: '#9ca3af' }}>-</td>
+                    <td style={{ padding: '10px', color: '#9ca3af' }}>{bid.vendorName}</td>
+                    <td style={{ padding: '10px', textAlign: 'right', color: '#9ca3af' }}>-</td>
+                    <td style={{ padding: '10px', textAlign: 'right', color: '#9ca3af' }}>-</td>
+                    <td style={{ padding: '10px', textAlign: 'right', color: '#9ca3af' }}>-</td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>{reason}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

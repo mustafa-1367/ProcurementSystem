@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Banknote, Calendar, Building, Send, Eye, Shield, TrendingDown, Lock } from 'lucide-react';
+import { FileText, Banknote, Calendar, Building, Send, Eye, Shield, TrendingDown, Lock, CheckCircle } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
@@ -26,6 +26,7 @@ export function TenderingPhase({
 }: TenderingPhaseProps) {
   const [selectedTender, setSelectedTender] = useState<any>(null);
   const [showBidForm, setShowBidForm] = useState(false);
+  const [bidSuccess, setBidSuccess] = useState<{ bidId: string; tenderTitle: string; vendorName: string; amount: string; onChain: boolean } | null>(null);
   const [bidForm, setBidForm] = useState({
     vendorName: '',
     vendorEmail: '',
@@ -72,6 +73,13 @@ export function TenderingPhase({
     setBids([...bids, newBid]);
     setBlockchainRecords([...blockchainRecords, blockchainRecord]);
     setShowBidForm(false);
+    setBidSuccess({
+      bidId: newBid.id,
+      tenderTitle: selectedTender.title,
+      vendorName: bidForm.vendorName,
+      amount: bidForm.amount,
+      onChain,
+    });
     setBidForm({
       vendorName: '',
       vendorEmail: '',
@@ -364,6 +372,63 @@ export function TenderingPhase({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bid Submission Success Modal */}
+      {bidSuccess && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div style={{ background: '#fff', borderRadius: 12, maxWidth: 480, width: '100%', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
+            <div style={{ background: '#ecfdf5', padding: '32px 24px', textAlign: 'center', borderBottom: '1px solid #a7f3d0' }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <CheckCircle style={{ width: 32, height: 32, color: '#065f46' }} />
+              </div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: 20, fontWeight: 700, color: '#065f46' }}>Bid Submitted Successfully</h3>
+              <p style={{ margin: 0, fontSize: 14, color: '#047857' }}>Your bid has been recorded and sealed.</p>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                  <span style={{ color: '#6b7280' }}>Tender</span>
+                  <span style={{ fontWeight: 600, color: '#0f2942' }}>{bidSuccess.tenderTitle}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                  <span style={{ color: '#6b7280' }}>Bidder</span>
+                  <span style={{ fontWeight: 600, color: '#0f2942' }}>{bidSuccess.vendorName}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                  <span style={{ color: '#6b7280' }}>Bid Amount</span>
+                  <span style={{ fontWeight: 600, color: '#0f2942' }}>{Number(bidSuccess.amount).toLocaleString()} AFN</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                  <span style={{ color: '#6b7280' }}>Bid ID</span>
+                  <span style={{ fontWeight: 600, color: '#0f2942', fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>{bidSuccess.bidId}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Lock style={{ width: 12, height: 12 }} /> Sealed & Encrypted
+                </span>
+                {bidSuccess.onChain && (
+                  <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    ● Recorded On-Chain
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setBidSuccess(null);
+                  setSelectedTender(null);
+                }}
+                style={{
+                  width: '100%', padding: '10px 0', borderRadius: 8, border: 'none',
+                  background: '#0f2942', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
