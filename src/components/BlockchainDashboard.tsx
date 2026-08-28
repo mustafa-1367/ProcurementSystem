@@ -218,7 +218,7 @@ export function BlockchainDashboard({ blockchainRecords, userRole }: BlockchainD
                               className="flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-full text-xs font-semibold hover:bg-emerald-100 transition-colors"
                             >
                               <Shield className="w-3.5 h-3.5" />
-                              {t('rewards.verifyBtn')} (+10 TOK)
+                              {t('rewards.verifyBtn')}
                             </button>
                           )}
                           {userRole === 'citizen' && verifiedRecords.has(record.id) && (

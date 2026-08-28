@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Flag } from 'lucide-react';
+import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Flag, Coins } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 
 interface PublicAuditDashboardProps {
@@ -281,7 +281,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                             className="flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-300 rounded-full text-xs font-semibold hover:bg-amber-100 transition-colors"
                           >
                             <Flag className="w-3.5 h-3.5" />
-                            {t('rewards.flagBtn')} (+20 TOK)
+                            {t('rewards.flagBtn')}
                           </button>
                         )}
                         {userRole === 'citizen' && flaggedTenders.has(tender.id) && (
@@ -636,6 +636,31 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           </div>
         );
       })()}
+
+      {/* Citizen Rewards Info — only visible to citizens */}
+      {userRole === 'citizen' && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fefce8 0%, #fef9c3 100%)',
+          border: '1px solid #fde68a', borderRadius: 14, padding: '20px 24px',
+          display: 'flex', alignItems: 'flex-start', gap: 16,
+        }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: 12, background: '#fbbf24',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            boxShadow: '0 2px 8px rgba(251,191,36,0.35)',
+          }}>
+            <Coins style={{ width: 22, height: 22, color: '#fff' }} />
+          </div>
+          <div>
+            <h4 style={{ margin: '0 0 6px', fontWeight: 700, fontSize: 16, color: '#92400e' }}>
+              {t('rewards.citizenRewardsTitle')}
+            </h4>
+            <p style={{ margin: 0, fontSize: 13.5, color: '#78350f', lineHeight: 1.6 }}>
+              {t('rewards.citizenRewardsText')}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Transparency Note */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
