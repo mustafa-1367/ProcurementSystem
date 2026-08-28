@@ -8,6 +8,8 @@ interface WhistleblowerPortalProps {
   setReports: (reports: any[]) => void;
   tenders: any[];
   contracts: any[];
+  disputes: any[];
+  setDisputes: (disputes: any[]) => void;
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
 }
@@ -17,6 +19,8 @@ export function WhistleblowerPortal({
   setReports,
   tenders,
   contracts,
+  disputes,
+  setDisputes,
   setBlockchainRecords,
   blockchainRecords,
 }: WhistleblowerPortalProps) {
@@ -30,10 +34,35 @@ export function WhistleblowerPortal({
     description: '',
     evidence: '',
     contactMethod: '',
+    reporterType: '',
+    routedTo: '',
   });
   const [zkProof, setZkProof] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [referralOpen, setReferralOpen] = useState<string | null>(null);
+  const [referralTarget, setReferralTarget] = useState('');
   const { t } = useTranslation();
+
+  const ROUTING_AUTHORITIES = [
+    { value: 'sao', label: t('whistleblower.routeSAO') },
+    { value: 'major_crimes', label: t('whistleblower.routeMajorCrimes') },
+    { value: 'national_inspector', label: t('whistleblower.routeNationalInspector') },
+    { value: 'ago', label: t('whistleblower.routeAGO') },
+    { value: 'ministry_interior', label: t('whistleblower.routeMinistryInterior') },
+  ];
+
+  const getAuthorityLabel = (value: string) => {
+    const all: Record<string, string> = {
+      sao: t('whistleblower.routeSAO'),
+      major_crimes: t('whistleblower.routeMajorCrimes'),
+      national_inspector: t('whistleblower.routeNationalInspector'),
+      ago: t('whistleblower.routeAGO'),
+      ministry_interior: t('whistleblower.routeMinistryInterior'),
+      directorate_contract_oversight: t('whistleblower.routeContractOversight'),
+      debarment_committee_npa: t('whistleblower.routeDebarmentNPA'),
+    };
+    return all[value] || value;
+  };
 
   const getFileIcon = (file: File) => {
     if (file.type.startsWith('image/')) return Image;
@@ -87,6 +116,7 @@ export function WhistleblowerPortal({
         amount: rewardAmount,
         status: 'pending_investigation',
       },
+      referrals: [] as { authority: string; referredAt: string; blockchainRecordId: string }[],
     };
 
     // Add to blockchain with ZK proof
@@ -125,7 +155,96 @@ export function WhistleblowerPortal({
       description: '',
       evidence: '',
       contactMethod: '',
+      reporterType: '',
+      routedTo: '',
     });
+  };
+
+  const handleReferReport = async (reportId: string, authority: string) => {
+    const { block, contract, onChain } = await addProcurementRecordAsync('whistleblower_referral', {
+      reportId,
+      referredTo: authority,
+      timestamp: Date.now(),
+    });
+
+    const blockchainRecord = {
+      id: block.hash,
+      type: 'whistleblower_referral',
+      reportId,
+      referredTo: authority,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    };
+
+    const updatedReports = reports.map((r) =>
+      r.id === reportId
+        ? {
+            ...r,
+            referrals: [
+              ...(r.referrals || []),
+              { authority, referredAt: new Date().toISOString(), blockchainRecordId: block.hash },
+            ],
+          }
+        : r
+    );
+
+    setReports(updatedReports);
+    setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+    setReferralOpen(null);
+    setReferralTarget('');
+  };
+
+  const handleEscalateToDAO = async (report: any) => {
+    const newComplaint = {
+      id: `CMP-${Date.now()}`,
+      title: `Escalated: ${report.title}`,
+      description: report.description,
+      relatedId: report.relatedId || '',
+      level: 'central_npa',
+      evidence: report.evidence || '',
+      type: 'oversight_complaint',
+      status: 'under_review',
+      sourceReportId: report.id,
+      committeeMembers: [],
+      reviewedBy: [],
+      routingDecision: null,
+      flaggedForReReview: false,
+      createdAt: new Date().toISOString(),
+      votes: { approve: 0, reject: 0, totalVoters: 0 },
+      votingDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      resolution: null,
+    };
+
+    const { block, contract, onChain } = await addProcurementRecordAsync('dispute_complaint', {
+      complaintId: newComplaint.id,
+      sourceReportId: report.id,
+      title: newComplaint.title,
+      escalated: true,
+    });
+
+    setBlockchainRecords([...blockchainRecords, {
+      id: block.hash,
+      type: 'whistleblower_escalation',
+      reportId: report.id,
+      disputeId: newComplaint.id,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    }]);
+
+    setDisputes([...disputes, newComplaint]);
+
+    // Mark report as escalated
+    setReports(reports.map((r) =>
+      r.id === report.id ? { ...r, escalatedToDAO: true, escalatedComplaintId: newComplaint.id } : r
+    ));
   };
 
   const categories = [
@@ -293,6 +412,53 @@ export function WhistleblowerPortal({
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-gray-700 mb-2">{t('whistleblower.reporterType')}</label>
+                <select
+                  required
+                  value={reportForm.reporterType}
+                  onChange={(e) => {
+                    const type = e.target.value;
+                    let routedTo = '';
+                    if (type === 'citizen') routedTo = 'directorate_contract_oversight';
+                    if (type === 'company_supplier') routedTo = 'debarment_committee_npa';
+                    setReportForm({ ...reportForm, reporterType: type, routedTo });
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                >
+                  <option value="">{t('whistleblower.selectReporterType')}</option>
+                  <option value="government_employee">{t('whistleblower.governmentEmployee')}</option>
+                  <option value="citizen">{t('whistleblower.citizenReporter')}</option>
+                  <option value="company_supplier">{t('whistleblower.companySupplier')}</option>
+                </select>
+              </div>
+
+              {reportForm.reporterType === 'government_employee' && (
+                <div>
+                  <label className="block text-gray-700 mb-2">{t('whistleblower.routeTo')}</label>
+                  <select
+                    required
+                    value={reportForm.routedTo}
+                    onChange={(e) => setReportForm({ ...reportForm, routedTo: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value="">{t('whistleblower.selectAuthority')}</option>
+                    {ROUTING_AUTHORITIES.map((auth) => (
+                      <option key={auth.value} value={auth.value}>{auth.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {(reportForm.reporterType === 'citizen' || reportForm.reporterType === 'company_supplier') && (
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm text-blue-800">
+                    {t('whistleblower.autoRouted')}: <strong>{getAuthorityLabel(reportForm.routedTo)}</strong>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -475,8 +641,23 @@ export function WhistleblowerPortal({
                         </div>
                       )}
 
+                      {/* Routing Info */}
+                      {report.routedTo && (
+                        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 mb-3">
+                          <Shield className="w-4 h-4 text-indigo-600" />
+                          <span className="text-sm text-indigo-800">
+                            {t('whistleblower.routedTo')}: <strong>{getAuthorityLabel(report.routedTo)}</strong>
+                          </span>
+                          {report.reporterType && (
+                            <span className="text-xs text-indigo-600 ml-2">
+                              ({report.reporterType === 'government_employee' ? t('whistleblower.governmentEmployee') : report.reporterType === 'citizen' ? t('whistleblower.citizenReporter') : t('whistleblower.companySupplier')})
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {report.rewards?.eligible && (
-                        <div className={`${report.rewards.status === 'awarded' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-lg p-3 flex items-center justify-between`}>
+                        <div className={`${report.rewards.status === 'awarded' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-lg p-3 flex items-center justify-between mb-3`}>
                           <div className="flex items-center gap-2">
                             <Coins className={`w-4 h-4 ${report.rewards.status === 'awarded' ? 'text-green-600' : 'text-amber-600'}`} />
                             <p className={report.rewards.status === 'awarded' ? 'text-green-800' : 'text-amber-800'}>
@@ -488,6 +669,72 @@ export function WhistleblowerPortal({
                           {report.rewards.status === 'awarded' && report.rewards.amount > 0 && (
                             <span className="text-green-700 font-bold">+{report.rewards.amount} TOK</span>
                           )}
+                        </div>
+                      )}
+
+                      {/* Referral System & Escalation */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <button
+                          onClick={() => setReferralOpen(referralOpen === report.id ? null : report.id)}
+                          className="flex items-center gap-2 text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          {t('whistleblower.referToAuthority')}
+                        </button>
+                        {!report.escalatedToDAO ? (
+                          <button
+                            onClick={() => handleEscalateToDAO(report)}
+                            className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            {t('whistleblower.escalateToDAO')}
+                          </button>
+                        ) : (
+                          <span className="flex items-center gap-1.5 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-full">
+                            <CheckCircle className="w-3 h-3" />
+                            {t('whistleblower.escalatedToDAO')}
+                          </span>
+                        )}
+                      </div>
+
+                      {referralOpen === report.id && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 flex items-center gap-3">
+                          <select
+                            value={referralTarget}
+                            onChange={(e) => setReferralTarget(e.target.value)}
+                            className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                          >
+                            <option value="">{t('whistleblower.selectAuthority')}</option>
+                            {ROUTING_AUTHORITIES.map((auth) => (
+                              <option key={auth.value} value={auth.value}>{auth.label}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => referralTarget && handleReferReport(report.id, referralTarget)}
+                            disabled={!referralTarget}
+                            className="flex items-center gap-1.5 text-sm bg-orange-600 text-white px-3 py-1.5 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            {t('whistleblower.referToAuthority')}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Referral History */}
+                      {report.referrals && report.referrals.length > 0 && (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                          <p className="text-sm font-semibold text-gray-700 mb-2">{t('whistleblower.referralHistory')}</p>
+                          <div className="space-y-1.5">
+                            {report.referrals.map((ref: any, idx: number) => (
+                              <div key={idx} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <Send className="w-3 h-3 text-gray-500" />
+                                  <span className="text-gray-700">{getAuthorityLabel(ref.authority)}</span>
+                                </div>
+                                <span className="text-gray-500 text-xs">{new Date(ref.referredAt).toLocaleDateString()}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

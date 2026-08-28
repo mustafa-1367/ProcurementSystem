@@ -146,6 +146,55 @@ export function PostTenderingPhase({
     return () => clearInterval(interval);
   }, [contracts]);
 
+  // Feature 4: Detect tenders flagged for re-review via oversight complaints
+  const flaggedForReReview = disputes
+    .filter((d) => d.type === 'oversight_complaint' && d.flaggedForReReview && d.routingDecision === 'evaluation_committee')
+    .map((d) => ({ tenderId: d.relatedId, complaintId: d.id, complaintTitle: d.title }));
+  const flaggedTenderIds = flaggedForReReview.map((f) => f.tenderId);
+
+  const handleBeginReReview = async (tenderId: string, complaintId: string) => {
+    // Reset evaluation stage to 1
+    setEvalStages({ ...evalStages, [tenderId]: 1 });
+
+    // Record on chain
+    const { block, contract, onChain } = await addProcurementRecordAsync('evaluation_rereview', {
+      tenderId,
+      triggeredBy: complaintId,
+    });
+
+    setBlockchainRecords([...blockchainRecords, {
+      id: block.hash,
+      type: 'evaluation_rereview',
+      tenderId,
+      disputeId: complaintId,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    }]);
+
+    // Update dispute status
+    setDisputes(disputes.map((d) =>
+      d.id === complaintId ? { ...d, status: 'rereview_in_progress' } : d
+    ));
+
+    // Reset tender status if awarded/standstill
+    setTenders(tenders.map((td) =>
+      td.id === tenderId && (td.status === 'awarded' || td.status === 'standstill')
+        ? { ...td, status: 'published' }
+        : td
+    ));
+
+    // Suspend any contract for this tender
+    setContracts(contracts.map((c) =>
+      c.tenderId === tenderId && (c.status === 'active' || c.status === 'standstill')
+        ? { ...c, status: 'suspended' }
+        : c
+    ));
+  };
+
   const tendersWithBids = tenders.filter((td) => {
     const tenderBids = bids.filter((b) => b.tenderId === td.id);
     return tenderBids.length > 0 && (td.status === 'published' || td.status === 'standstill');
@@ -958,6 +1007,51 @@ export function PostTenderingPhase({
         </div>
       </div>
 
+      {/* Flagged for Re-Review Section */}
+      {flaggedForReReview.length > 0 && (
+        <div style={{ ...cardStyle, borderColor: '#f59e0b', background: '#fffbeb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Flag style={{ width: 18, height: 18, color: '#d97706' }} />
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#92400e', margin: 0 }}>Flagged for Evaluation Committee Re-Review</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {flaggedForReReview.map((flagged) => {
+              const tender = tenders.find((td) => td.id === flagged.tenderId);
+              const complaint = disputes.find((d) => d.id === flagged.complaintId);
+              if (!tender) return null;
+              const isReReviewing = complaint?.status === 'rereview_in_progress';
+              return (
+                <div key={flagged.complaintId} style={{ background: '#fff', border: '1px solid #fcd34d', borderRadius: 8, padding: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f2942' }}>{tender.title}</span>
+                        <span style={{ ...badgeStyle, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>Re-Review Required</span>
+                        {isReReviewing && (
+                          <span style={{ ...badgeStyle, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>Re-Review in Progress</span>
+                        )}
+                      </div>
+                      <p style={{ color: '#6b7280', fontSize: '12.5px', margin: '2px 0' }}>Triggered by: {flagged.complaintTitle}</p>
+                      {complaint?.evidence && (
+                        <p style={{ color: '#9ca3af', fontSize: '11.5px', margin: '2px 0' }}>Evidence: {complaint.evidence}</p>
+                      )}
+                    </div>
+                    {!isReReviewing && (
+                      <button
+                        onClick={() => handleBeginReReview(flagged.tenderId, flagged.complaintId)}
+                        style={{ ...navyBtnStyle, fontSize: '12px', padding: '7px 12px' }}
+                      >
+                        Begin Re-Review
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Bid Evaluation Section */}
       <div className="space-y-4">
         <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0f2942' }}>Bid Evaluation</h3>
@@ -978,7 +1072,15 @@ export function PostTenderingPhase({
                 <div key={tender.id} style={cardStyle}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isSelected && !isAwarded ? 16 : 0 }}>
                     <div>
-                      <h4 style={{ fontWeight: 700, color: '#0f2942', fontSize: '15px', margin: 0 }}>{tender.title}</h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <h4 style={{ fontWeight: 700, color: '#0f2942', fontSize: '15px', margin: 0 }}>{tender.title}</h4>
+                        {flaggedTenderIds.includes(tender.id) && (
+                          <span style={{ ...badgeStyle, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', fontSize: '10px' }}>
+                            <Flag style={{ width: 10, height: 10, display: 'inline', verticalAlign: 'middle', marginRight: 3 }} />
+                            Re-Review
+                          </span>
+                        )}
+                      </div>
                       <p style={{ color: '#6b7280', fontSize: '13px', marginTop: 2 }}>{tenderBids.length} bids received</p>
                     </div>
                     {isAwarded ? (

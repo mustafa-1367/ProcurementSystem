@@ -11,15 +11,19 @@ interface DAOGovernanceProps {
   contracts: any[];
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
+  reports: any[];
+  setReports: (reports: any[]) => void;
 }
 
-export function DAOGovernance({ 
-  disputes, 
-  setDisputes, 
+export function DAOGovernance({
+  disputes,
+  setDisputes,
   tenders,
   contracts,
-  setBlockchainRecords, 
-  blockchainRecords 
+  setBlockchainRecords,
+  blockchainRecords,
+  reports,
+  setReports,
 }: DAOGovernanceProps) {
   const [showCreateDispute, setShowCreateDispute] = useState(false);
   const [disputeForm, setDisputeForm] = useState({
@@ -32,6 +36,19 @@ export function DAOGovernance({
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; type: string; size: number; url: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userVotes, setUserVotes] = useState<{ [key: string]: 'approve' | 'reject' }>({});
+  const [activePanel, setActivePanel] = useState<'disputes' | 'oversight'>('disputes');
+  const [committeeMembers, setCommitteeMembers] = useState<string[]>([]);
+  const [memberInput, setMemberInput] = useState('');
+  const [complaintForm, setComplaintForm] = useState<{
+    title: string; description: string; relatedId: string; level: string; evidence: string; sourceReportId?: string;
+  }>({
+    title: '',
+    description: '',
+    relatedId: '',
+    level: '',
+    evidence: '',
+    sourceReportId: '',
+  });
   const { t } = useTranslation();
   const { connected, isCorrectNetwork, connect } = useWeb3();
 
@@ -177,6 +194,90 @@ export function DAOGovernance({
     setDisputes(updatedDisputes);
   };
 
+  // Filter whistleblower reports for linking
+  const whistleblowerReports = reports.filter((r: any) => r.type !== 'evaluation_report');
+
+  // Oversight complaint handlers
+  const oversightComplaints = disputes.filter((d) => d.type === 'oversight_complaint');
+  const validComplaints = oversightComplaints.filter((d) => d.routingDecision === 'evaluation_committee');
+  const invalidComplaints = oversightComplaints.filter((d) => d.routingDecision === 'dismissed');
+
+  const handleSubmitComplaint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (committeeMembers.length < 3) return;
+
+    const newComplaint = {
+      id: `CMP-${Date.now()}`,
+      ...complaintForm,
+      type: 'oversight_complaint',
+      status: 'under_review',
+      committeeMembers,
+      reviewedBy: [],
+      routingDecision: null,
+      flaggedForReReview: false,
+      createdAt: new Date().toISOString(),
+      votes: { approve: 0, reject: 0, totalVoters: 0 },
+      votingDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      resolution: null,
+    };
+
+    const { block, contract, onChain } = await addProcurementRecordAsync('dispute_complaint', {
+      complaintId: newComplaint.id,
+      title: complaintForm.title,
+      level: complaintForm.level,
+      sourceReportId: complaintForm.sourceReportId || null,
+    });
+
+    setBlockchainRecords([...blockchainRecords, {
+      id: block.hash,
+      type: 'oversight_complaint',
+      disputeId: newComplaint.id,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    }]);
+
+    setDisputes([...disputes, newComplaint]);
+    setComplaintForm({ title: '', description: '', relatedId: '', level: '', evidence: '', sourceReportId: '' });
+  };
+
+  const handleMarkComplaint = async (complaintId: string, valid: boolean) => {
+    const updated = disputes.map((d) =>
+      d.id === complaintId
+        ? {
+            ...d,
+            routingDecision: valid ? 'evaluation_committee' : 'dismissed',
+            flaggedForReReview: valid,
+            status: valid ? 'routed' : 'dismissed',
+          }
+        : d
+    );
+    setDisputes(updated);
+
+    if (valid) {
+      const { block, contract, onChain } = await addProcurementRecordAsync('dispute_complaint', {
+        complaintId,
+        action: 'routed_to_evaluation_committee',
+      });
+
+      setBlockchainRecords([...blockchainRecords, {
+        id: block.hash,
+        type: 'complaint_routed',
+        disputeId: complaintId,
+        contractId: contract.id,
+        transactionHash: contract.transactionHash,
+        routedTo: 'evaluation_committee',
+        timestamp: new Date().toISOString(),
+        verified: onChain,
+        simulated: !onChain,
+        onChain,
+      }]);
+    }
+  };
+
   const activeDisputes = disputes.filter((d) => d.status === 'voting');
   const resolvedDisputes = disputes.filter((d) => d.status === 'resolved');
 
@@ -206,6 +307,293 @@ export function DAOGovernance({
         </div>
       </div>
 
+      {/* Panel Tabs */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActivePanel('disputes')}
+          style={{
+            padding: '8px 16px', borderRadius: 8, fontSize: '13.5px', fontWeight: 700,
+            background: activePanel === 'disputes' ? '#0f2942' : '#f3f4f6',
+            color: activePanel === 'disputes' ? '#fff' : '#374151',
+            border: activePanel === 'disputes' ? 'none' : '1px solid #d1d5db',
+            cursor: 'pointer',
+          }}
+        >
+          {t('dao.disputeVoting')}
+        </button>
+        <button
+          onClick={() => setActivePanel('oversight')}
+          style={{
+            padding: '8px 16px', borderRadius: 8, fontSize: '13.5px', fontWeight: 700,
+            background: activePanel === 'oversight' ? '#0f2942' : '#f3f4f6',
+            color: activePanel === 'oversight' ? '#fff' : '#374151',
+            border: activePanel === 'oversight' ? 'none' : '1px solid #d1d5db',
+            cursor: 'pointer',
+          }}
+        >
+          {t('dao.contractOversight')}
+        </button>
+      </div>
+
+      {/* ===== CONTRACT IMPLEMENTATION OVERSIGHT PANEL ===== */}
+      {activePanel === 'oversight' && (
+        <div className="space-y-6">
+          {/* Committee Members */}
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <h3 className="text-gray-900 mb-1 font-semibold">{t('dao.oversightPanel')}</h3>
+            <p className="text-gray-600 text-sm mb-4">{t('dao.oversightDesc')}</p>
+
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-medium mb-2">{t('dao.committeeMembers')} ({committeeMembers.length}/3 {t('dao.membersRequired')})</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={memberInput}
+                  onChange={(e) => setMemberInput(e.target.value)}
+                  placeholder={t('dao.memberPlaceholder')}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && memberInput.trim()) {
+                      e.preventDefault();
+                      setCommitteeMembers([...committeeMembers, memberInput.trim()]);
+                      setMemberInput('');
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (memberInput.trim()) {
+                      setCommitteeMembers([...committeeMembers, memberInput.trim()]);
+                      setMemberInput('');
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                >
+                  {t('dao.addMember')}
+                </button>
+              </div>
+              {committeeMembers.length < 3 && (
+                <p className="text-amber-600 text-xs flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {t('dao.minimumMembers')}
+                </p>
+              )}
+              {committeeMembers.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {committeeMembers.map((m, i) => (
+                    <span key={i} className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded-full text-sm">
+                      {m}
+                      <button onClick={() => setCommitteeMembers(committeeMembers.filter((_, idx) => idx !== i))} className="text-blue-500 hover:text-blue-700">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Oversight Stats */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+              <p className="text-gray-600 text-sm">{t('dao.complaintsCount')}</p>
+              <p className="text-gray-900 text-2xl font-bold mt-1">{oversightComplaints.length}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+              <p className="text-gray-600 text-sm">{t('dao.validComplaints')}</p>
+              <p className="text-green-700 text-2xl font-bold mt-1">{validComplaints.length}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+              <p className="text-gray-600 text-sm">{t('dao.invalidComplaints')}</p>
+              <p className="text-red-700 text-2xl font-bold mt-1">{invalidComplaints.length}</p>
+            </div>
+          </div>
+
+          {/* Submit Complaint Form */}
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <h3 className="text-gray-900 mb-4 font-semibold">{t('dao.submitComplaint')}</h3>
+            <form onSubmit={handleSubmitComplaint} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-700 text-sm mb-2">{t('dao.complaintTitle')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={complaintForm.title}
+                    onChange={(e) => setComplaintForm({ ...complaintForm, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={t('dao.complaintPlaceholder')}
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-2">{t('dao.disputeLevel')}</label>
+                  <select
+                    required
+                    value={complaintForm.level}
+                    onChange={(e) => setComplaintForm({ ...complaintForm, level: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">{t('dao.selectLevel')}</option>
+                    <option value="central_npa">{t('dao.centralNPA')}</option>
+                    <option value="ministry_level">{t('dao.ministryLevel')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-sm mb-2">{t('dao.relatedTender')}</label>
+                  <select
+                    value={complaintForm.relatedId}
+                    onChange={(e) => setComplaintForm({ ...complaintForm, relatedId: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">{t('dao.selectTender')}</option>
+                    {tenders.map((td) => (
+                      <option key={td.id} value={td.id}>{td.title}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Related Whistleblower Report */}
+              {whistleblowerReports.length > 0 && (
+                <div>
+                  <label className="block text-gray-700 text-sm mb-2">{t('dao.relatedReport')}</label>
+                  <select
+                    value={complaintForm.sourceReportId || ''}
+                    onChange={(e) => {
+                      const reportId = e.target.value;
+                      const report = reports.find((r: any) => r.id === reportId);
+                      setComplaintForm({
+                        ...complaintForm,
+                        sourceReportId: reportId,
+                        ...(report && !complaintForm.title ? { title: `Escalated: ${report.title}`, description: report.description, evidence: report.evidence || '' } : {}),
+                        ...(report?.relatedId && !complaintForm.relatedId ? { relatedId: report.relatedId } : {}),
+                      });
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">{t('dao.selectReport')}</option>
+                    {whistleblowerReports.map((r: any) => (
+                      <option key={r.id} value={r.id}>{r.title} ({r.category})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-gray-700 text-sm mb-2">{t('dao.complaintDescription')}</label>
+                <textarea
+                  required
+                  value={complaintForm.description}
+                  onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={t('dao.complaintDescPlaceholder')}
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 text-sm mb-2">{t('dao.complaintEvidence')}</label>
+                <textarea
+                  value={complaintForm.evidence}
+                  onChange={(e) => setComplaintForm({ ...complaintForm, evidence: e.target.value })}
+                  rows={2}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={t('dao.complaintEvidencePlaceholder')}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={committeeMembers.length < 3}
+                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Shield className="w-5 h-5" />
+                {t('dao.submitComplaint')}
+              </button>
+            </form>
+          </div>
+
+          {/* Routing Dashboard */}
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <h3 className="text-gray-900 mb-4 font-semibold">{t('dao.routingDashboard')}</h3>
+            {oversightComplaints.length === 0 ? (
+              <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500">{t('dao.noComplaints')}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {oversightComplaints.map((complaint) => (
+                  <div key={complaint.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-gray-900 font-medium">{complaint.title}</h4>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            complaint.level === 'central_npa' ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'
+                          }`}>
+                            {complaint.level === 'central_npa' ? t('dao.centralNPA') : t('dao.ministryLevel')}
+                          </span>
+                          {blockchainRecords.some(r => r.disputeId === complaint.id && r.onChain) && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm">{complaint.description}</p>
+                        {complaint.evidence && (
+                          <p className="text-gray-500 text-xs mt-1">{t('dao.complaintEvidence')}: {complaint.evidence}</p>
+                        )}
+                        <p className="text-gray-400 text-xs mt-1">{new Date(complaint.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        {complaint.routingDecision === 'evaluation_committee' ? (
+                          <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full text-xs font-medium">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            {t('dao.complaintValid')}
+                          </span>
+                        ) : complaint.routingDecision === 'dismissed' ? (
+                          <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 px-3 py-1 rounded-full text-xs font-medium">
+                            <XCircle className="w-3.5 h-3.5" />
+                            {t('dao.complaintInvalid')}
+                          </span>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleMarkComplaint(complaint.id, true)}
+                              className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-green-700 transition-colors"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              {t('dao.markValid')}
+                            </button>
+                            <button
+                              onClick={() => handleMarkComplaint(complaint.id, false)}
+                              className="flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-red-700 transition-colors"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              {t('dao.markInvalid')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {complaint.committeeMembers && complaint.committeeMembers.length > 0 && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <Users className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-xs text-gray-500">{t('dao.committeeMembers')}: {complaint.committeeMembers.join(', ')}</span>
+                      </div>
+                    )}
+                    {complaint.sourceReportId && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <MessageSquare className="w-3.5 h-3.5 text-orange-400" />
+                        <span className="text-xs text-orange-600">{t('dao.linkedReport')}: {complaint.sourceReportId}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activePanel === 'disputes' && <>
       {/* DAO Statistics */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
@@ -617,6 +1005,7 @@ export function DAOGovernance({
           </div>
         </div>
       </div>
+      </>}
     </div>
   );
 }

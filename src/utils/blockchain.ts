@@ -13,7 +13,7 @@ export interface Block {
   nonce: number;
 }
 
-export type ContractType = 'tender' | 'bid' | 'award' | 'payment' | 'dispute' | 'dao_resolution' | 'whistleblower_report' | 'objection' | 'supplier_registration' | 'bid_submission';
+export type ContractType = 'tender' | 'bid' | 'award' | 'payment' | 'dispute' | 'dao_resolution' | 'whistleblower_report' | 'whistleblower_referral' | 'dispute_complaint' | 'evaluation_rereview' | 'objection' | 'supplier_registration' | 'bid_submission';
 
 export interface SmartContract {
   id: string;

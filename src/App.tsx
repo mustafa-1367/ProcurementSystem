@@ -478,6 +478,8 @@ function AppContent() {
             contracts={contracts}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
+            reports={reports}
+            setReports={setReports}
           />
         )}
         {activePhase === 'whistleblower' && (
@@ -486,6 +488,8 @@ function AppContent() {
             setReports={setReports}
             tenders={tenders}
             contracts={contracts}
+            disputes={disputes}
+            setDisputes={setDisputes}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
           />
