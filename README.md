@@ -1,6 +1,6 @@
 # Decentralized Public E-Procurement Ecosystem
 
-A full-stack decentralized application (dApp) that brings transparency and accountability to public procurement, with Afghanistan as a running case. Built as a thesis dApp, it implements the complete procurement lifecycle on the Ethereum blockchain — from tender creation to contract execution — aligned with the Afghan National Procurement Law.
+A full-stack decentralized application (dApp) that brings transparency and accountability to public procurement, with Afghanistan as a running case. Built as a dApp, it implements the complete procurement lifecycle on the Ethereum blockchain — from tender creation to contract execution — aligned with the Afghan National Procurement Law.
 
 **[Live Demo](https://mustafa-1367.github.io/ProcurementSystem/)**
 
