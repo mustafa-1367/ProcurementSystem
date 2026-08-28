@@ -56,43 +56,38 @@ const roleFirstTab: Record<UserRole, string> = {
 
 const roles: UserRole[] = ['citizen', 'supplier', 'government', 'auditor', 'oversight'];
 
-function loadLocal<T>(key: string, fallback: T): T {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch { return fallback; }
-}
-
 function AppContent() {
   const [activePhase, setActivePhase] = useState<string>('dashboard');
-  const [tenders, setTenders] = useState<any[]>(() => loadLocal('proc_tenders', []));
-  const [bids, setBids] = useState<any[]>(() => loadLocal('proc_bids', []));
-  const [contracts, setContracts] = useState<any[]>(() => loadLocal('proc_contracts', []));
-  const [blockchainRecords, setBlockchainRecords] = useState<any[]>(() => loadLocal('proc_blockchainRecords', []));
-  const [disputes, setDisputes] = useState<any[]>(() => loadLocal('proc_disputes', []));
-  const [reports, setReports] = useState<any[]>(() => loadLocal('proc_reports', []));
-  const [reputationScores, setReputationScores] = useState<any[]>(() => loadLocal('proc_reputationScores', []));
+  const [tenders, setTenders] = useState<any[]>([]);
+  const [bids, setBids] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
+  const [blockchainRecords, setBlockchainRecords] = useState<any[]>([]);
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [reputationScores, setReputationScores] = useState<any[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   // Load shared state from Firebase on mount
   useEffect(() => {
     loadSharedState().then((data) => {
-      if (!data) return;
-      if (data.tenders?.length) setTenders(data.tenders);
-      if (data.bids?.length) setBids(data.bids);
-      if (data.contracts?.length) setContracts(data.contracts);
-      if (data.blockchainRecords?.length) setBlockchainRecords(data.blockchainRecords);
-      if (data.disputes?.length) setDisputes(data.disputes);
-      if (data.reports?.length) setReports(data.reports);
-      if (data.reputationScores?.length) setReputationScores(data.reputationScores);
+      if (data) {
+        if (data.tenders) setTenders(data.tenders);
+        if (data.bids) setBids(data.bids);
+        if (data.contracts) setContracts(data.contracts);
+        if (data.blockchainRecords) setBlockchainRecords(data.blockchainRecords);
+        if (data.disputes) setDisputes(data.disputes);
+        if (data.reports) setReports(data.reports);
+        if (data.reputationScores) setReputationScores(data.reputationScores);
+      }
+      setLoaded(true);
     });
   }, []);
 
-  // Save to both localStorage and Firebase on any change
+  // Save to Firebase on any change (only after initial load)
   useEffect(() => {
-    const state = { tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores };
-    Object.entries(state).forEach(([k, v]) => localStorage.setItem(`proc_${k}`, JSON.stringify(v)));
-    saveSharedState(state);
-  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores]);
+    if (!loaded) return;
+    saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores });
+  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, loaded]);
   const { t, language, setLanguage, dir } = useTranslation();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('government');
