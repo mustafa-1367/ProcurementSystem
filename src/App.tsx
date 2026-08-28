@@ -14,13 +14,28 @@ import { SubmitBid } from './components/SubmitBid';
 import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale } from 'lucide-react';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Shield } from 'lucide-react';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
 import { loadSharedState, saveSharedState } from './utils/sharedStorage';
+import { useWeb3 } from './utils/useWeb3';
+import { getDeploymentInfo } from './utils/web3Provider';
+
 
 type UserRole = 'citizen' | 'supplier' | 'government' | 'auditor' | 'oversight';
+
+const ROLE_MAP: Record<number, UserRole> = {
+  1: 'citizen',
+  2: 'supplier',
+  3: 'government',
+  4: 'auditor',
+  5: 'oversight',
+};
+
+const ALL_ROLES: UserRole[] = ['citizen', 'supplier', 'government', 'auditor', 'oversight'];
+
+
 
 const allTabs = [
   { id: 'dashboard',    icon: Activity },
@@ -36,10 +51,11 @@ const allTabs = [
   { id: 'submitBid',    icon: Send },
   { id: 'myContracts',  icon: Briefcase },
   { id: 'disputes',     icon: Scale },
+  { id: 'admin',        icon: Shield },
 ];
 
 const roleTabs: Record<UserRole, string[]> = {
-  government: ['dashboard', 'pre', 'tender', 'post', 'audit', 'reputation', 'dao'],
+  government: ['dashboard', 'pre', 'tender', 'post', 'audit', 'reputation', 'dao', 'admin'],
   supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'audit', 'reputation', 'whistleblower'],
   citizen:    ['dashboard', 'audit', 'reputation', 'dao', 'whistleblower'],
   auditor:    ['dashboard', 'audit', 'reputation'],
@@ -54,7 +70,133 @@ const roleFirstTab: Record<UserRole, string> = {
   oversight: 'dashboard',
 };
 
-const roles: UserRole[] = ['citizen', 'supplier', 'government', 'auditor', 'oversight'];
+const ASSIGNABLE_ROLES: { value: number; label: string }[] = [
+  { value: 1, label: 'citizen' },
+  { value: 2, label: 'supplier' },
+  { value: 3, label: 'government' },
+  { value: 4, label: 'auditor' },
+  { value: 5, label: 'oversight' },
+];
+
+function AdminPanel({ procurementContract, t }: { procurementContract: any; t: (key: string) => string }) {
+  const [address, setAddress] = useState('');
+  const [selectedRole, setSelectedRole] = useState(4); // default to Auditor
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [lookupAddress, setLookupAddress] = useState('');
+  const [lookupResult, setLookupResult] = useState<string | null>(null);
+
+  const handleAssign = async () => {
+    if (!procurementContract || !address) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const tx = await procurementContract.assignRole(address, selectedRole);
+      await tx.wait();
+      const roleName = ASSIGNABLE_ROLES.find((r) => r.value === selectedRole)?.label || 'Unknown';
+      setResult({ type: 'success', message: `${t(`role.${roleName}`)} role assigned to ${address.slice(0, 6)}…${address.slice(-4)}` });
+      setAddress('');
+    } catch (err: any) {
+      setResult({ type: 'error', message: err?.reason || err?.message || 'Transaction failed' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLookup = async () => {
+    if (!procurementContract || !lookupAddress) return;
+    try {
+      const roleNum = await procurementContract.getRole(lookupAddress);
+      const role = ASSIGNABLE_ROLES.find((r) => r.value === Number(roleNum));
+      setLookupResult(role ? t(`role.${role.label}`) : t('admin.noRole'));
+    } catch {
+      setLookupResult(t('admin.lookupFailed'));
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0f2942', marginBottom: 4 }}>{t('admin.title')}</h2>
+      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>{t('admin.desc')}</p>
+
+      {/* Assign Role */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 20 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f2942', marginBottom: 16 }}>{t('admin.assignRole')}</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>{t('admin.walletAddress')}</label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="0x..."
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'monospace' }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>{t('admin.selectRole')}</label>
+            <select
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(Number(e.target.value))}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
+            >
+              {ASSIGNABLE_ROLES.map((r) => (
+                <option key={r.value} value={r.value}>{t(`role.${r.label}`)}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={handleAssign}
+            disabled={loading || !address}
+            style={{
+              padding: '12px 20px', borderRadius: 8, border: 'none',
+              background: loading ? '#9ca3af' : '#0f2942', color: '#fff',
+              fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loading ? t('admin.assigning') : t('admin.assignBtn')}
+          </button>
+          {result && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              background: result.type === 'success' ? '#d1fae5' : '#fee2e2',
+              color: result.type === 'success' ? '#065f46' : '#991b1b',
+            }}>
+              {result.message}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Lookup Role */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f2942', marginBottom: 16 }}>{t('admin.lookupRole')}</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={lookupAddress}
+            onChange={(e) => setLookupAddress(e.target.value)}
+            placeholder="0x..."
+            style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'monospace' }}
+          />
+          <button
+            onClick={handleLookup}
+            disabled={!lookupAddress}
+            style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+          >
+            {t('admin.lookupBtn')}
+          </button>
+        </div>
+        {lookupResult && (
+          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#eff6ff', color: '#1e40af', fontSize: 14, fontWeight: 600 }}>
+            {lookupResult}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 function AppContent() {
   const [activePhase, setActivePhase] = useState<string>('dashboard');
@@ -90,10 +232,60 @@ function AppContent() {
   }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, loaded]);
   const { t, language, setLanguage, dir } = useTranslation();
   const [showLangMenu, setShowLangMenu] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole>('government');
+  const [userRole, setUserRole] = useState<UserRole>('citizen');
+  const [onChainRole, setOnChainRole] = useState<UserRole | null>(null);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [roleLoading, setRoleLoading] = useState(false);
   const tablistRef = useRef<HTMLDivElement>(null);
   const langBtnRef = useRef<HTMLButtonElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
+
+  const { connected, account, procurementContract, isCorrectNetwork } = useWeb3();
+  const isOwner = connected && account?.toLowerCase() === getDeploymentInfo().deployer.toLowerCase();
+
+  // Fetch role from smart contract when wallet connects
+  useEffect(() => {
+    if (!connected || !procurementContract || !account || !isCorrectNetwork) {
+      setOnChainRole(null);
+      return;
+    }
+    (async () => {
+      try {
+        const roleNum = await procurementContract.getRole(account);
+        const role = ROLE_MAP[Number(roleNum)];
+        if (role) {
+          setOnChainRole(role);
+          setUserRole(role);
+          setShowRoleModal(false);
+        } else {
+          setOnChainRole(null);
+          setShowRoleModal(true);
+        }
+      } catch {
+        setOnChainRole(null);
+        setUserRole('citizen');
+      }
+    })();
+  }, [connected, account, procurementContract, isCorrectNetwork]);
+
+  const handleRegisterRole = async (roleNum: number) => {
+    if (!procurementContract) return;
+    setRoleLoading(true);
+    try {
+      const tx = await procurementContract.registerRole(roleNum);
+      await tx.wait();
+      const role = ROLE_MAP[roleNum];
+      if (role) {
+        setOnChainRole(role);
+        setUserRole(role);
+        setShowRoleModal(false);
+      }
+    } catch (err: any) {
+      alert(err?.reason || err?.message || 'Registration failed');
+    } finally {
+      setRoleLoading(false);
+    }
+  };
 
   const handleEscape = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -121,12 +313,7 @@ function AppContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showLangMenu]);
 
-  const switchRole = (role: UserRole) => {
-    setUserRole(role);
-    setActivePhase(roleFirstTab[role]);
-  };
-
-  const visibleTabIds = roleTabs[userRole];
+  const visibleTabIds = roleTabs[userRole].filter((id) => id !== 'admin' || isOwner);
   const visibleTabs = visibleTabIds.map((id) => allTabs.find((tab) => tab.id === id)!).filter(Boolean);
 
   // Arrow key navigation for tablist
@@ -211,10 +398,10 @@ function AppContent() {
           {/* Right: Role switcher + utilities */}
           <div className="header-controls flex items-center" style={{ gap: 10 }}>
             <nav aria-label={t('role.switchRole')} className="role-switch flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
-              {roles.map((role) => (
+              {ALL_ROLES.map((role) => (
                 <button
                   key={role}
-                  onClick={() => switchRole(role)}
+                  onClick={() => { setUserRole(role); setActivePhase(roleFirstTab[role]); }}
                   style={{
                     border: 'none',
                     background: userRole === role ? '#c99a3c' : 'transparent',
@@ -232,6 +419,9 @@ function AppContent() {
                   onMouseLeave={(e) => { if (userRole !== role) (e.target as HTMLElement).style.background = 'transparent'; }}
                 >
                   {t(`role.${role}`)}
+                  {onChainRole === role && (
+                    <span style={{ marginLeft: 4, fontSize: '9px', verticalAlign: 'super', color: userRole === role ? '#065f46' : '#6ee7b7' }}>●</span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -311,7 +501,7 @@ function AppContent() {
           >
             {visibleTabs.map((tab, index) => {
               const isActive = activePhase === tab.id;
-              const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id;
+              const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id === 'admin' ? 'admin' : tab.id;
               return (
                 <button
                   key={tab.id}
@@ -473,10 +663,43 @@ function AppContent() {
             blockchainRecords={blockchainRecords}
           />
         )}
+        {activePhase === 'admin' && isOwner && (
+          <AdminPanel procurementContract={procurementContract} t={t} />
+        )}
         {activePhase === 'help' && (
           <HelpSupport />
         )}
       </main>
+
+      {/* Role Registration Modal */}
+      {showRoleModal && connected && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.5)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f2942' }}>{t('role.registerTitle')}</h2>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#6b7280' }}>{t('role.registerDesc')}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                onClick={() => handleRegisterRole(1)}
+                disabled={roleLoading}
+                style={{ padding: '14px 20px', borderRadius: 10, border: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f2942' }}>{t('role.citizen')}</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('role.citizenDesc')}</div>
+              </button>
+              <button
+                onClick={() => handleRegisterRole(2)}
+                disabled={roleLoading}
+                style={{ padding: '14px 20px', borderRadius: 10, border: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', textAlign: 'left' }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f2942' }}>{t('role.supplier')}</div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('role.supplierDesc')}</div>
+              </button>
+            </div>
+            {roleLoading && <p style={{ marginTop: 16, fontSize: 13, color: '#c99a3c', fontWeight: 600 }}>{t('role.registering')}</p>}
+            <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af' }}>{t('role.privilegedNote')}</p>
+          </div>
+        </div>
+      )}
 
       <FeedbackWidget />
     </div>

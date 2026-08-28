@@ -5,6 +5,44 @@ pragma solidity ^0.8.24;
 /// @notice Stores tenders, bids, awards, payments, disputes, and whistleblower reports on-chain
 contract ProcurementSystem {
 
+    // ── Role Management ────────────────────────────────────────────────
+    enum Role { None, Citizen, Supplier, Government, Auditor, Oversight }
+
+    address public owner;
+    mapping(address => Role) public walletRoles;
+
+    event RoleAssigned(address indexed account, Role role);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+        walletRoles[msg.sender] = Role.Government;
+    }
+
+    /// @notice Self-register as Citizen or Supplier
+    function registerRole(uint8 role) external {
+        require(walletRoles[msg.sender] == Role.None, "Already registered");
+        require(role == uint8(Role.Citizen) || role == uint8(Role.Supplier), "Can only self-register as Citizen or Supplier");
+        walletRoles[msg.sender] = Role(role);
+        emit RoleAssigned(msg.sender, Role(role));
+    }
+
+    /// @notice Owner assigns privileged roles (Government, Auditor, Oversight)
+    function assignRole(address account, uint8 role) external onlyOwner {
+        require(role >= uint8(Role.Citizen) && role <= uint8(Role.Oversight), "Invalid role");
+        walletRoles[account] = Role(role);
+        emit RoleAssigned(account, Role(role));
+    }
+
+    /// @notice Get role for an address
+    function getRole(address account) external view returns (uint8) {
+        return uint8(walletRoles[account]);
+    }
+
     // ── Events ──────────────────────────────────────────────────────────
     event TenderCreated(bytes32 indexed tenderId, address indexed creator, string title, uint256 budget, uint256 deadline);
     event TenderPublished(bytes32 indexed tenderId, address indexed publisher);
