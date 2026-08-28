@@ -139,9 +139,10 @@ export function WhistleblowerPortal({
     { value: 'Unfair Bidding', label: t('whistleblower.unfairBidding') },
   ];
 
-  const pendingReports = reports.filter((r) => r.investigationStatus === 'pending');
-  const underInvestigation = reports.filter((r) => r.investigationStatus === 'investigating');
-  const resolvedReports = reports.filter((r) => r.investigationStatus === 'resolved');
+  const whistleblowerReports = reports.filter((r) => r.type !== 'evaluation_report');
+  const pendingReports = whistleblowerReports.filter((r) => r.investigationStatus === 'pending');
+  const underInvestigation = whistleblowerReports.filter((r) => r.investigationStatus === 'investigating');
+  const resolvedReports = whistleblowerReports.filter((r) => r.investigationStatus === 'resolved');
 
   return (
     <div className="space-y-6">
@@ -176,7 +177,7 @@ export function WhistleblowerPortal({
             <AlertTriangle className="w-8 h-8 opacity-100" />
           </div>
           <p className="opacity-100">{t('whistleblower.totalReports')}</p>
-          <p className="mt-1">{reports.length}</p>
+          <p className="mt-1">{whistleblowerReports.length}</p>
         </div>
 
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-md p-6">
@@ -405,7 +406,7 @@ export function WhistleblowerPortal({
       <div className="space-y-4">
         <h3 className="text-gray-900">{t('whistleblower.allReports')}</h3>
         
-        {reports.length === 0 ? (
+        {whistleblowerReports.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
             <AlertTriangle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600">{t('whistleblower.noReports')}</p>
@@ -413,7 +414,7 @@ export function WhistleblowerPortal({
           </div>
         ) : (
           <div className="space-y-3">
-            {reports.map((report) => {
+            {whistleblowerReports.map((report) => {
               const severityColors = {
                 low: 'bg-blue-100 text-blue-900',
                 medium: 'bg-amber-100 text-amber-900',
@@ -474,7 +475,7 @@ export function WhistleblowerPortal({
                         </div>
                       )}
 
-                      {report.rewards.eligible && (
+                      {report.rewards?.eligible && (
                         <div className={`${report.rewards.status === 'awarded' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-lg p-3 flex items-center justify-between`}>
                           <div className="flex items-center gap-2">
                             <Coins className={`w-4 h-4 ${report.rewards.status === 'awarded' ? 'text-green-600' : 'text-amber-600'}`} />
