@@ -96,6 +96,10 @@ export const en = {
     goToTendering: 'Go to Tendering',
     openPublicAudit: 'Open Public Audit',
     recentTenders: 'Recent Tenders',
+    statusDraft: 'Draft',
+    statusPublished: 'Published',
+    statusStandstill: 'Standstill Period',
+    statusAwarded: 'Contract Awarded',
     titleEntity: 'Tender Management',
     subtitleEntity: 'Create and publish a new tender.',
     titlePublic: 'Procurement Overview',
@@ -120,6 +124,12 @@ export const en = {
     underEvaluation: 'Under Evaluation',
     evaluated: 'Evaluated',
     contractSigned: 'Contract Signed',
+    bidSubmitted: 'Bid Submitted',
+    awarded: 'Awarded',
+    notSelected: 'Not Selected',
+    contractActive: 'Contract Active',
+    contractCompleted: 'Contract Completed',
+    standstillPeriod: 'Standstill Period',
   },
 
   // PreTenderPhase

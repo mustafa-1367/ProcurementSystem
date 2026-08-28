@@ -94,6 +94,10 @@ export const fa = {
     goToTendering: 'رفتن به داوطلبی',
     openPublicAudit: 'بازرسی عامه',
     recentTenders: 'داوطلبی‌های اخیر',
+    statusDraft: 'پیش‌نویس',
+    statusPublished: 'منتشر شده',
+    statusStandstill: 'دوره توقف',
+    statusAwarded: 'قرارداد اعطا شده',
     titleEntity: 'مدیریت داوطلبی',
     subtitleEntity: 'یک داوطلبی جدید ایجاد و منتشر کنید.',
     titlePublic: 'مرور تدارکات',
@@ -118,6 +122,12 @@ export const fa = {
     underEvaluation: 'تحت ارزیابی',
     evaluated: 'ارزیابی شده',
     contractSigned: 'قرارداد امضا شده',
+    bidSubmitted: 'داوطلبی ارسال شد',
+    awarded: 'اعطا شده',
+    notSelected: 'انتخاب نشده',
+    contractActive: 'قرارداد فعال',
+    contractCompleted: 'قرارداد تکمیل شده',
+    standstillPeriod: 'دوره توقف',
   },
 
   preTender: {

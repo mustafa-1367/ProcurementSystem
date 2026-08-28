@@ -40,20 +40,38 @@ export function ProcurementDashboard({
       ? Math.round(contracts.reduce((sum, c) => sum + (c.progress || 0), 0) / contracts.length)
       : 0;
 
-    const recentActivity = [
-      ...bids.slice().reverse().slice(0, 5).map((bid) => ({
+    const getBidStatus = (bid: any) => {
+      // Check if this bid's tender has a contract (awarded)
+      const contract = contracts.find((c) => c.tenderId === bid.tenderId);
+      if (contract) {
+        const isWinner = contract.vendorName === bid.vendorName;
+        if (isWinner) {
+          if (contract.status === 'completed') return { stage: t('bidderDash.contractCompleted'), status: t('bidderDash.contractCompleted'), statusClass: 'b-good' };
+          if (contract.status === 'active') return { stage: t('bidderDash.contractActive'), status: t('bidderDash.contractActive'), statusClass: 'b-good' };
+          if (contract.status === 'standstill') return { stage: t('bidderDash.standstillPeriod'), status: t('bidderDash.awarded'), statusClass: 'b-info' };
+          return { stage: t('bidderDash.awarded'), status: t('bidderDash.awarded'), statusClass: 'b-good' };
+        }
+        return { stage: t('bidderDash.notSelected'), status: t('bidderDash.notSelected'), statusClass: 'b-default' };
+      }
+      // Check tender status
+      const tender = tenders.find((td) => td.id === bid.tenderId);
+      if (tender?.status === 'standstill' || tender?.status === 'awarded') {
+        return { stage: t('bidderDash.evaluated'), status: t('bidderDash.evaluated'), statusClass: 'b-warn' };
+      }
+      // Check if deadline passed
+      if (tender && new Date(tender.deadline).getTime() <= Date.now()) {
+        return { stage: t('bidderDash.underEvaluation'), status: t('bidderDash.underEvaluation'), statusClass: 'b-warn' };
+      }
+      return { stage: t('bidderDash.bidSubmitted'), status: t('bidderDash.bidSubmitted'), statusClass: 'b-info' };
+    };
+
+    const recentActivity = bids.slice().reverse().slice(0, 5).map((bid) => {
+      const info = getBidStatus(bid);
+      return {
         tender: `${bid.tenderId} — ${bid.tenderTitle}`,
-        stage: bid.evaluated ? t('bidderDash.evaluated') : t('bidderDash.underEvaluation'),
-        status: bid.evaluated ? t('bidderDash.evaluated') : t('bidderDash.underEvaluation'),
-        statusClass: bid.evaluated ? 'b-good' : 'b-warn',
-      })),
-      ...contracts.slice().reverse().slice(0, 3).map((c) => ({
-        tender: `${c.tenderId} — ${c.tenderTitle}`,
-        stage: t('bidderDash.contractSigned'),
-        status: t('bidderDash.contractSigned'),
-        statusClass: 'b-good',
-      })),
-    ].slice(0, 5);
+        ...info,
+      };
+    });
 
     const statStyle: React.CSSProperties = {
       background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16,
@@ -258,17 +276,33 @@ export function ProcurementDashboard({
 
       <div className="space-y-4">
         <h3 className="text-gray-900">{t('dashboard.recentTenders')}</h3>
-        {tenders.slice().reverse().slice(0, 4).map((tender) => (
-          <div key={tender.id} className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-gray-900 font-medium">{tender.title}</div>
-                <div className="text-gray-600 text-sm">{tender.department} • {tender.category}</div>
+        {tenders.slice().reverse().slice(0, 4).map((tender) => {
+          const statusStyles: Record<string, { color: string; bg: string; border: string; label: string }> = {
+            draft: { color: '#52514e', bg: '#f0efec', border: '#e1e0d9', label: t('dashboard.statusDraft') },
+            published: { color: '#1c5cab', bg: '#eef5fd', border: '#bcd6f5', label: t('dashboard.statusPublished') },
+            standstill: { color: '#8a5a12', bg: '#fdf3df', border: '#f0dcae', label: t('dashboard.statusStandstill') },
+            awarded: { color: '#0a6b0a', bg: '#eaf8ea', border: '#c7ecc7', label: t('dashboard.statusAwarded') },
+          };
+          const s = statusStyles[tender.status] || statusStyles.draft;
+          return (
+            <div key={tender.id} className="bg-white rounded-lg p-4 border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-gray-900 font-medium">{tender.title}</div>
+                  <div className="text-gray-600 text-sm">{tender.department} • {tender.category}</div>
+                </div>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: '11.5px', fontWeight: 700, padding: '3px 9px',
+                  borderRadius: 999, border: `1px solid ${s.border}`,
+                  color: s.color, background: s.bg, whiteSpace: 'nowrap',
+                }}>
+                  {s.label}
+                </span>
               </div>
-              <div className="text-gray-700">{tender.status}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

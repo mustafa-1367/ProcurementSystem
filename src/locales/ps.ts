@@ -94,6 +94,10 @@ export const ps = {
     goToTendering: 'داوطلبۍ ته لاړ شئ',
     openPublicAudit: 'عامه پلټنه خلاصه کړئ',
     recentTenders: 'وروستۍ داوطلبۍ',
+    statusDraft: 'مسوده',
+    statusPublished: 'خپور شوی',
+    statusStandstill: 'د درنګ دوره',
+    statusAwarded: 'قرارداد ورکړل شوی',
     titleEntity: 'د داوطلبۍ مدیریت',
     subtitleEntity: 'یوه نوې داوطلبي جوړه او خپره کړئ.',
     titlePublic: 'د تدارکاتو کتنه',
@@ -118,6 +122,12 @@ export const ps = {
     underEvaluation: 'د ارزونې لاندې',
     evaluated: 'ارزول شوی',
     contractSigned: 'قرارداد لاسلیک شوی',
+    bidSubmitted: 'داوطلبي سپارل شوې',
+    awarded: 'ورکړل شوې',
+    notSelected: 'غوره نه شوی',
+    contractActive: 'قرارداد فعال',
+    contractCompleted: 'قرارداد بشپړ شوی',
+    standstillPeriod: 'د درنګ دوره',
   },
 
   preTender: {
