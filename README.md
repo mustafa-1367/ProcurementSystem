@@ -1,6 +1,6 @@
-# Sharakat Chain - Blockchain-Based Public Procurement System
+# Decentralized Public E-Procurement Ecosystem
 
-A full-stack decentralized application (dApp) that brings transparency and accountability to public procurement in Afghanistan. Built as a thesis prototype, it implements the complete procurement lifecycle on the Ethereum blockchain — from tender creation to contract execution — aligned with the Afghan National Procurement Law.
+A full-stack decentralized application (dApp) that brings transparency and accountability to public procurement, with Afghanistan as a running case. Built as a thesis dApp, it implements the complete procurement lifecycle on the Ethereum blockchain — from tender creation to contract execution — aligned with the Afghan National Procurement Law.
 
 **[Live Demo](https://mustafa-1367.github.io/ProcurementSystem/)**
 
@@ -8,7 +8,7 @@ A full-stack decentralized application (dApp) that brings transparency and accou
 
 ## Why This Exists
 
-Public procurement in Afghanistan faces systemic issues: opaque bid evaluations, contract manipulation, and limited public oversight. This prototype demonstrates how blockchain technology can enforce transparency at every stage — making every tender, bid, evaluation, and payment verifiable on-chain.
+Public procurement faces systemic issues: opaque bid evaluations, contract manipulation, and limited public oversight. This dApp demonstrates how blockchain technology can enforce transparency at every stage — making every tender, bid, evaluation, and payment verifiable on-chain.
 
 ## Key Features
 
