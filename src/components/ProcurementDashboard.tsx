@@ -1,10 +1,9 @@
 import React from 'react';
-import { FileText, Eye, AlertTriangle, CreditCard, PlusCircle } from 'lucide-react';
+import { FileText, Eye, AlertTriangle, PlusCircle } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 
 interface ProcurementDashboardProps {
   setActivePhase: (p: any) => void;
-  setShowWallet: (v: boolean) => void;
   tenders: any[];
   bids: any[];
   contracts: any[];
@@ -20,7 +19,6 @@ interface ProcurementDashboardProps {
 
 export function ProcurementDashboard({
   setActivePhase,
-  setShowWallet,
   tenders,
   bids,
   contracts,
@@ -90,7 +88,7 @@ export function ProcurementDashboard({
             <div style={lblStyle}>{t('bidderDash.contractsInProgress')}</div>
           </div>
           <div style={statStyle}>
-            <div style={valStyle}>${pendingMilestones.toLocaleString()}</div>
+            <div style={valStyle}>{pendingMilestones.toLocaleString()} AFN</div>
             <div style={lblStyle}>{t('bidderDash.pendingMilestones')}</div>
           </div>
           <div style={statStyle}>
@@ -177,15 +175,6 @@ export function ProcurementDashboard({
             userRole === 'oversight' ? t('dashboard.subtitleOversight') :
             t('dashboard.subtitle')
           }</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowWallet(true)}
-            className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 hover:shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          >
-            <CreditCard className="w-4 h-4 text-gray-700" />
-            <span className="text-gray-700">{t('dashboard.openWallet')}</span>
-          </button>
         </div>
       </div>
 

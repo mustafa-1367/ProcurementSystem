@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Award, CheckCircle, DollarSign, Calendar, FileText, TrendingUp, Shield, AlertCircle } from 'lucide-react';
-import { addProcurementRecord } from '../utils/blockchain';
+import { Award, CheckCircle, Banknote, Calendar, FileText, TrendingUp, Shield, AlertCircle } from 'lucide-react';
+import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface PostTenderingPhaseProps {
@@ -61,7 +61,7 @@ export function PostTenderingPhase({
     return num;
   };
 
-  const awardContract = (tender: any, bid: any) => {
+  const awardContract = async (tender: any, bid: any) => {
     const newContract = {
       id: `CNT-${Date.now()}`,
       tenderId: tender.id,
@@ -81,7 +81,7 @@ export function PostTenderingPhase({
       progress: 0,
     };
 
-    const { block, contract } = addProcurementRecord('award', {
+    const { block, contract, onChain } = await addProcurementRecordAsync('award', {
       tenderId: tender.id,
       bidderId: bid.id,
       amount: bid.amount,
@@ -96,7 +96,7 @@ export function PostTenderingPhase({
       smartContractId: contract.id,
       transactionHash: contract.transactionHash,
       timestamp: new Date().toISOString(),
-      verified: true,
+      verified: onChain, simulated: !onChain, onChain,
     };
 
     const updatedTenders = tenders.map((td) =>
@@ -109,35 +109,40 @@ export function PostTenderingPhase({
     setSelectedTender(null);
   };
 
-  const processMilestonePayment = (contractId: string, milestoneId: number) => {
+  const processMilestonePayment = async (contractId: string, milestoneId: number) => {
+    const targetContract = contracts.find((c) => c.id === contractId);
+    if (!targetContract) return;
+
+    const milestone = targetContract.milestones.find((m: any) => m.id === milestoneId);
+    if (!milestone) return;
+
+    const { block, contract, onChain } = await addProcurementRecordAsync('payment', {
+      contractId,
+      amount: milestone.amount,
+      milestone: milestone.name,
+      milestoneId,
+    });
+
+    const blockchainRecord = {
+      id: block.hash,
+      type: 'payment_processed',
+      contractId,
+      milestoneId,
+      smartContractId: contract.id,
+      transactionHash: contract.transactionHash,
+      amount: milestone.amount,
+      timestamp: new Date().toISOString(),
+      verified: onChain, simulated: !onChain, onChain,
+    };
+
+    setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+
     const updatedContracts = contracts.map((c) => {
       if (c.id === contractId) {
         const updatedMilestones = c.milestones.map((m: any) =>
           m.id === milestoneId ? { ...m, status: 'paid', paidAt: new Date().toISOString() } : m
         );
         const progress = (updatedMilestones.filter((m: any) => m.status === 'paid').length / updatedMilestones.length) * 100;
-
-        const milestone = c.milestones.find((m: any) => m.id === milestoneId);
-        const { block, contract } = addProcurementRecord('payment', {
-          contractId: c.id,
-          amount: milestone.amount,
-          milestone: milestone.name,
-        });
-
-        const blockchainRecord = {
-          id: block.hash,
-          type: 'payment_processed',
-          contractId: c.id,
-          milestoneId,
-          smartContractId: contract.id,
-          transactionHash: contract.transactionHash,
-          amount: milestone.amount,
-          timestamp: new Date().toISOString(),
-          verified: true,
-        };
-
-        setBlockchainRecords([...blockchainRecords, blockchainRecord]);
-
         return {
           ...c,
           milestones: updatedMilestones,
@@ -194,7 +199,7 @@ export function PostTenderingPhase({
                 {contracts.reduce((sum, c) => sum + Number(c.amount), 0).toLocaleString()} {t('postTender.afn')}
               </p>
             </div>
-            <DollarSign className="w-8 h-8 text-yellow-600" />
+            <Banknote className="w-8 h-8 text-yellow-600" />
           </div>
         </div>
       </div>
@@ -246,7 +251,7 @@ export function PostTenderingPhase({
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 text-gray-600 mb-3">
                                   <div className="flex items-center gap-2">
-                                    <DollarSign className="w-4 h-4" />
+                                    <Banknote className="w-4 h-4" />
                                     {Number(bid.amount).toLocaleString()} {t('postTender.afn')}
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -325,13 +330,16 @@ export function PostTenderingPhase({
                         }`}>
                           {contract.status === 'completed' ? t('postTender.completed') : t('postTender.active')}
                         </span>
+                        {blockchainRecords.some(r => r.contractId === contract.id && r.onChain) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                        )}
                       </div>
                       <div className="grid grid-cols-3 gap-4 text-gray-600">
                         <div className="flex items-center gap-2">
                           <span>{t('postTender.vendor')} {contract.vendorName}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <DollarSign className="w-4 h-4" />
+                          <Banknote className="w-4 h-4" />
                           {Number(contract.amount).toLocaleString()} {t('postTender.afn')}
                         </div>
                         <div className="flex items-center gap-2">
@@ -360,7 +368,7 @@ export function PostTenderingPhase({
                             {milestone.status === 'paid' && <CheckCircle className="w-4 h-4 text-green-700" />}
                           </div>
                           <div className="flex items-center gap-2 text-gray-600">
-                            <DollarSign className="w-4 h-4" />
+                            <Banknote className="w-4 h-4" />
                             {Number(milestone.amount).toLocaleString()} {t('postTender.afn')}
                           </div>
                         </div>

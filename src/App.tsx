@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { PreTenderPhase } from './components/PreTenderPhase';
 import { TenderingPhase } from './components/TenderingPhase';
 import { PostTenderingPhase } from './components/PostTenderingPhase';
-import { BlockchainDashboard } from './components/BlockchainDashboard';
 import { PublicAuditDashboard } from './components/PublicAuditDashboard';
 import { DAOGovernance } from './components/DAOGovernance';
 import { WhistleblowerPortal } from './components/WhistleblowerPortal';
@@ -15,10 +14,11 @@ import { SubmitBid } from './components/SubmitBid';
 import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { FileText, Gavel, CheckCircle, Link as LinkIcon, Eye, Users, AlertTriangle, Award, CreditCard, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale } from 'lucide-react';
-import { WalletPanel } from './components/WalletPanel';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale } from 'lucide-react';
+import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
+import { loadSharedState, saveSharedState } from './utils/sharedStorage';
 
 type UserRole = 'citizen' | 'supplier' | 'government' | 'auditor' | 'oversight';
 
@@ -29,7 +29,6 @@ const allTabs = [
   { id: 'post',         icon: CheckCircle },
   { id: 'audit',        icon: Eye },
   { id: 'reputation',   icon: Award },
-  { id: 'blockchain',   icon: LinkIcon },
   { id: 'dao',          icon: Users },
   { id: 'whistleblower',icon: AlertTriangle },
   { id: 'supplier',     icon: Truck },
@@ -40,10 +39,10 @@ const allTabs = [
 ];
 
 const roleTabs: Record<UserRole, string[]> = {
-  government: ['dashboard', 'pre', 'tender', 'post', 'audit', 'reputation', 'blockchain', 'dao'],
+  government: ['dashboard', 'pre', 'tender', 'post', 'audit', 'reputation', 'dao'],
   supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'audit', 'reputation', 'whistleblower'],
-  citizen:    ['dashboard', 'audit', 'reputation', 'blockchain', 'dao', 'whistleblower'],
-  auditor:    ['dashboard', 'audit', 'blockchain', 'reputation'],
+  citizen:    ['dashboard', 'audit', 'reputation', 'dao', 'whistleblower'],
+  auditor:    ['dashboard', 'audit', 'reputation'],
   oversight:  ['dashboard', 'dao', 'whistleblower', 'audit', 'reputation'],
 };
 
@@ -57,18 +56,43 @@ const roleFirstTab: Record<UserRole, string> = {
 
 const roles: UserRole[] = ['citizen', 'supplier', 'government', 'auditor', 'oversight'];
 
+function loadLocal<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch { return fallback; }
+}
+
 function AppContent() {
   const [activePhase, setActivePhase] = useState<string>('dashboard');
-  const [tenders, setTenders] = useState<any[]>([]);
-  const [bids, setBids] = useState<any[]>([]);
-  const [contracts, setContracts] = useState<any[]>([]);
-  const [blockchainRecords, setBlockchainRecords] = useState<any[]>([]);
-  const [disputes, setDisputes] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
-  const [reputationScores, setReputationScores] = useState<any[]>([]);
-  const [walletBalance, setWalletBalance] = useState<number>(5000);
-  const [walletTxs, setWalletTxs] = useState<any[]>([]);
-  const [showWallet, setShowWallet] = useState(false);
+  const [tenders, setTenders] = useState<any[]>(() => loadLocal('proc_tenders', []));
+  const [bids, setBids] = useState<any[]>(() => loadLocal('proc_bids', []));
+  const [contracts, setContracts] = useState<any[]>(() => loadLocal('proc_contracts', []));
+  const [blockchainRecords, setBlockchainRecords] = useState<any[]>(() => loadLocal('proc_blockchainRecords', []));
+  const [disputes, setDisputes] = useState<any[]>(() => loadLocal('proc_disputes', []));
+  const [reports, setReports] = useState<any[]>(() => loadLocal('proc_reports', []));
+  const [reputationScores, setReputationScores] = useState<any[]>(() => loadLocal('proc_reputationScores', []));
+
+  // Load shared state from Firebase on mount
+  useEffect(() => {
+    loadSharedState().then((data) => {
+      if (!data) return;
+      if (data.tenders?.length) setTenders(data.tenders);
+      if (data.bids?.length) setBids(data.bids);
+      if (data.contracts?.length) setContracts(data.contracts);
+      if (data.blockchainRecords?.length) setBlockchainRecords(data.blockchainRecords);
+      if (data.disputes?.length) setDisputes(data.disputes);
+      if (data.reports?.length) setReports(data.reports);
+      if (data.reputationScores?.length) setReputationScores(data.reputationScores);
+    });
+  }, []);
+
+  // Save to both localStorage and Firebase on any change
+  useEffect(() => {
+    const state = { tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores };
+    Object.entries(state).forEach(([k, v]) => localStorage.setItem(`proc_${k}`, JSON.stringify(v)));
+    saveSharedState(state);
+  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores]);
   const { t, language, setLanguage, dir } = useTranslation();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('government');
@@ -266,7 +290,7 @@ function AppContent() {
 
             {/* Help */}
             <button
-              onClick={() => { setActivePhase('help'); setShowWallet(false); setShowLangMenu(false); }}
+              onClick={() => { setActivePhase('help'); setShowLangMenu(false); }}
               className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
               style={{ color: activePhase === 'help' ? '#ffffff' : '#c7d3e0', padding: '6px 8px', fontSize: '12.5px' }}
             >
@@ -274,15 +298,9 @@ function AppContent() {
               <span>{t('nav.help')}</span>
             </button>
 
-            {/* Wallet */}
-            <button
-              onClick={() => { setShowWallet(true); setShowLangMenu(false); }}
-              className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-              style={{ color: '#c7d3e0', padding: '6px 8px', fontSize: '12.5px' }}
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>{walletBalance} {t('app.tok')}</span>
-            </button>
+            {/* Blockchain Wallet Connection */}
+            <Web3Status />
+
           </div>
         </div>
       </header>
@@ -305,7 +323,7 @@ function AppContent() {
                   role="tab"
                   aria-selected={isActive}
                   tabIndex={isActive ? 0 : -1}
-                  onClick={() => { setActivePhase(tab.id); setShowWallet(false); }}
+                  onClick={() => { setActivePhase(tab.id); }}
                   onKeyDown={(e) => handleTabKeyDown(e, index)}
                   className="focus:outline-none"
                   style={{
@@ -336,7 +354,6 @@ function AppContent() {
         {activePhase === 'dashboard' && (
           <ProcurementDashboard
             setActivePhase={setActivePhase}
-            setShowWallet={setShowWallet}
             tenders={tenders}
             bids={bids}
             contracts={contracts}
@@ -348,17 +365,6 @@ function AppContent() {
             setReports={setReports}
             setBlockchainRecords={setBlockchainRecords}
             userRole={userRole}
-          />
-        )}
-        {showWallet && (
-          <WalletPanel
-            balance={walletBalance}
-            setBalance={setWalletBalance}
-            transactions={walletTxs}
-            setTransactions={setWalletTxs}
-            setBlockchainRecords={setBlockchainRecords}
-            blockchainRecords={blockchainRecords}
-            onClose={() => setShowWallet(false)}
           />
         )}
         {activePhase === 'pre' && (
@@ -400,10 +406,6 @@ function AppContent() {
             contracts={contracts}
             blockchainRecords={blockchainRecords}
             userRole={userRole}
-            walletBalance={walletBalance}
-            setWalletBalance={setWalletBalance}
-            walletTxs={walletTxs}
-            setWalletTxs={setWalletTxs}
           />
         )}
         {activePhase === 'dao' && (
@@ -424,10 +426,6 @@ function AppContent() {
             contracts={contracts}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
-            walletBalance={walletBalance}
-            setWalletBalance={setWalletBalance}
-            walletTxs={walletTxs}
-            setWalletTxs={setWalletTxs}
           />
         )}
         {activePhase === 'reputation' && (
@@ -447,25 +445,11 @@ function AppContent() {
             blockchainRecords={blockchainRecords}
           />
         )}
-        {activePhase === 'blockchain' && (
-          <BlockchainDashboard
-            blockchainRecords={blockchainRecords}
-            userRole={userRole}
-            walletBalance={walletBalance}
-            setWalletBalance={setWalletBalance}
-            walletTxs={walletTxs}
-            setWalletTxs={setWalletTxs}
-          />
-        )}
         {activePhase === 'register' && (
           <RegisterKYC
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
             userRole={userRole}
-            walletBalance={walletBalance}
-            setWalletBalance={setWalletBalance}
-            walletTxs={walletTxs}
-            setWalletTxs={setWalletTxs}
           />
         )}
         {activePhase === 'submitBid' && (

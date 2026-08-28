@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { Users, Vote, AlertCircle, CheckCircle, XCircle, MessageSquare, TrendingUp, Shield, Upload, FileText, Image, Video, X } from 'lucide-react';
-import { addProcurementRecord } from '../utils/blockchain';
+import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
+import { useWeb3 } from '../utils/useWeb3';
 
 interface DAOGovernanceProps {
   disputes: any[];
@@ -32,6 +33,7 @@ export function DAOGovernance({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userVotes, setUserVotes] = useState<{ [key: string]: 'approve' | 'reject' }>({});
   const { t } = useTranslation();
+  const { connected, isCorrectNetwork, connect } = useWeb3();
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -68,7 +70,7 @@ export function DAOGovernance({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleCreateDispute = (e: React.FormEvent) => {
+  const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newDispute = {
@@ -87,7 +89,7 @@ export function DAOGovernance({
     };
 
     // Add to blockchain
-    const { block, contract } = addProcurementRecord('dispute', {
+    const { block, contract, success, onChain } = await addProcurementRecordAsync('dispute', {
       disputeId: newDispute.id,
       title: disputeForm.title,
       type: disputeForm.type,
@@ -100,7 +102,9 @@ export function DAOGovernance({
       contractId: contract.id,
       transactionHash: contract.transactionHash,
       timestamp: new Date().toISOString(),
-      verified: true,
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
     };
 
     setDisputes([...disputes, newDispute]);
@@ -116,57 +120,59 @@ export function DAOGovernance({
     setUploadedFiles([]);
   };
 
-  const castVote = (disputeId: string, vote: 'approve' | 'reject') => {
+  const castVote = async (disputeId: string, vote: 'approve' | 'reject') => {
     // Record user's vote
     setUserVotes({ ...userVotes, [disputeId]: vote });
 
-    // Update dispute votes
-    const updatedDisputes = disputes.map((d) => {
-      if (d.id === disputeId) {
-        const newVotes = {
-          approve: d.votes.approve + (vote === 'approve' ? 1 : 0),
-          reject: d.votes.reject + (vote === 'reject' ? 1 : 0),
-          totalVoters: d.votes.totalVoters + 1,
-        };
+    const dispute = disputes.find((d) => d.id === disputeId);
+    if (!dispute) return;
 
-        // Auto-resolve if threshold reached (e.g., 10 votes)
-        let status = d.status;
-        let resolution = d.resolution;
-        
-        if (newVotes.totalVoters >= 10) {
-          const approvalRate = (newVotes.approve / newVotes.totalVoters) * 100;
-          status = 'resolved';
-          resolution = {
-            decision: approvalRate >= 60 ? 'approved' : 'rejected',
-            approvalRate,
-            resolvedAt: new Date().toISOString(),
-          };
+    const newVotes = {
+      approve: dispute.votes.approve + (vote === 'approve' ? 1 : 0),
+      reject: dispute.votes.reject + (vote === 'reject' ? 1 : 0),
+      totalVoters: dispute.votes.totalVoters + 1,
+    };
 
-          // Add resolution to blockchain
-          const { block, contract } = addProcurementRecord('dao_resolution', {
-            disputeId,
-            decision: resolution.decision,
-            approvalRate,
-          });
+    let status = dispute.status;
+    let resolution = dispute.resolution;
 
-          const blockchainRecord = {
-            id: block.hash,
-            type: 'dao_resolution',
-            disputeId,
-            contractId: contract.id,
-            transactionHash: contract.transactionHash,
-            decision: resolution.decision,
-            timestamp: new Date().toISOString(),
-            verified: true,
-          };
+    // Auto-resolve if threshold reached (e.g., 10 votes)
+    if (newVotes.totalVoters >= 10) {
+      const approvalRate = (newVotes.approve / newVotes.totalVoters) * 100;
+      status = 'resolved';
+      resolution = {
+        decision: approvalRate >= 60 ? 'approved' : 'rejected',
+        approvalRate,
+        resolvedAt: new Date().toISOString(),
+      };
 
-          setBlockchainRecords([...blockchainRecords, blockchainRecord]);
-        }
+      // Add resolution to blockchain
+      const { block: resBlock, contract: resContract, onChain: resOnChain } = await addProcurementRecordAsync('dao_resolution', {
+        disputeId,
+        decision: resolution.decision,
+        approve: resolution.decision === 'approved',
+        approvalRate,
+      });
 
-        return { ...d, votes: newVotes, status, resolution };
-      }
-      return d;
-    });
+      const blockchainRecord = {
+        id: resBlock.hash,
+        type: 'dao_resolution',
+        disputeId,
+        contractId: resContract.id,
+        transactionHash: resContract.transactionHash,
+        decision: resolution.decision,
+        timestamp: new Date().toISOString(),
+        verified: resOnChain,
+        simulated: !resOnChain,
+        onChain: resOnChain,
+      };
+
+      setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+    }
+
+    const updatedDisputes = disputes.map((d) =>
+      d.id === disputeId ? { ...d, votes: newVotes, status, resolution } : d
+    );
 
     setDisputes(updatedDisputes);
   };
@@ -189,6 +195,15 @@ export function DAOGovernance({
           <AlertCircle className="w-5 h-5" />
           {t('dao.raiseDispute')}
         </button>
+      </div>
+
+      {/* Simulation Disclaimer */}
+      <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <Shield className="w-5 h-5 text-amber-600 flex-shrink-0" />
+        <div>
+          <p className="text-amber-900 font-medium text-sm">{t('dao.simulationNotice')}</p>
+          <p className="text-amber-700 text-xs mt-0.5">{t('dao.simulationDesc')}</p>
+        </div>
       </div>
 
       {/* DAO Statistics */}
@@ -231,7 +246,7 @@ export function DAOGovernance({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600">{t('dao.daoMembers')}</p>
-              <p className="text-gray-900 mt-1">247</p>
+              <p className="text-gray-900 mt-1">{t('dao.simulatedCount')}</p>
             </div>
             <Users className="w-8 h-8 text-yellow-600" />
           </div>
@@ -417,6 +432,9 @@ export function DAOGovernance({
                         <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-full">
                           {dispute.type.replace(/_/g, ' ')}
                         </span>
+                        {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                        )}
                       </div>
                       <p className="text-gray-600 mb-3">{dispute.description}</p>
 
@@ -494,7 +512,22 @@ export function DAOGovernance({
                       </div>
 
                       {/* Vote Buttons */}
-                      {!hasVoted ? (
+                      {!connected || !isCorrectNetwork ? (
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm">
+                            <Shield className="w-4 h-4" />
+                            {t('dao.walletRequiredToVote')}
+                          </div>
+                          {!connected && (
+                            <button
+                              onClick={connect}
+                              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                            >
+                              {t('dao.connectToVote')}
+                            </button>
+                          )}
+                        </div>
+                      ) : !hasVoted ? (
                         <div className="flex gap-3">
                           <button
                             onClick={() => castVote(dispute.id, 'approve')}
@@ -544,6 +577,11 @@ export function DAOGovernance({
                       }`}>
                         {dispute.resolution.decision}
                       </span>
+                      {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                      ) : blockchainRecords.some(r => r.disputeId === dispute.id) ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }}>● Simulated</span>
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-gray-600">
                       <div>

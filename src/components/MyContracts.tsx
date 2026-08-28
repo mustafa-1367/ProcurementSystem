@@ -33,19 +33,19 @@ export function MyContracts({ contracts, bids, tenders }: MyContractsProps) {
         <p className="text-gray-600 mt-1">{t('myContracts.subtitle')}</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-5">
-          <div className="text-sm text-gray-500">{t('myContracts.totalContracts')}</div>
-          <div className="text-2xl font-bold text-gray-900 mt-1">{contracts.length}</div>
+      {/* Summary Stats — Sharakat Chain style */}
+      <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+        <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{contracts.length}</div>
+          <div style={{ color: '#6e6c66', fontSize: 12, marginTop: 2 }}>{t('myContracts.totalContracts')}</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-5">
-          <div className="text-sm text-gray-500">{t('myContracts.activeContracts')}</div>
-          <div className="text-2xl font-bold text-blue-600 mt-1">{contracts.filter(c => c.status === 'active').length}</div>
+        <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{contracts.filter(c => c.status === 'active').length}</div>
+          <div style={{ color: '#6e6c66', fontSize: 12, marginTop: 2 }}>{t('myContracts.activeContracts')}</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-5">
-          <div className="text-sm text-gray-500">{t('myContracts.completedContracts')}</div>
-          <div className="text-2xl font-bold text-green-600 mt-1">{contracts.filter(c => c.status === 'completed').length}</div>
+        <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{contracts.filter(c => c.status === 'completed').length}</div>
+          <div style={{ color: '#6e6c66', fontSize: 12, marginTop: 2 }}>{t('myContracts.completedContracts')}</div>
         </div>
       </div>
 

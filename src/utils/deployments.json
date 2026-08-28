@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contracts": {
+    "ProcurementSystem": "0xC418A33C626EA2A91C52534946bAD69f314A2e76",
+    "ProcToken": "0x71d2502c67ACd9394aB2d76A50Aaec2cfDCdA314"
+  },
+  "deployer": "0xf25DA310af24B6C28237c173e81b19665766E875",
+  "timestamp": "2026-08-28T08:32:25.794Z"
+}

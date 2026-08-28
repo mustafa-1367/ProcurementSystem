@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Plus, Upload, FileText, Calendar, DollarSign, Building, Shield, CheckCircle } from 'lucide-react';
-import { addProcurementRecord } from '../utils/blockchain';
+import { Plus, Upload, FileText, Calendar, Banknote, Building, Shield, CheckCircle } from 'lucide-react';
+import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface PreTenderPhaseProps {
@@ -64,7 +64,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       publishedAt: null,
     };
 
-    const { block, contract } = addProcurementRecord('tender', {
+    const { block, contract, onChain } = await addProcurementRecordAsync('tender', {
       title: formData.title,
       budget: formData.budget,
       deadline: formData.deadline,
@@ -78,7 +78,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       contractId: contract.id,
       transactionHash: contract.transactionHash,
       timestamp: new Date().toISOString(),
-      verified: true,
+      verified: onChain, simulated: !onChain, onChain,
     };
 
     setTenders([...tenders, newTender]);
@@ -86,14 +86,14 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     resetCreateFlow();
   };
 
-  const publishTender = (tenderId: string) => {
+  const publishTender = async (tenderId: string) => {
     const updatedTenders = tenders.map((td) =>
       td.id === tenderId ? { ...td, status: 'published', publishedAt: new Date().toISOString() } : td
     );
 
     const tender = tenders.find((td) => td.id === tenderId);
 
-    const { block, contract } = addProcurementRecord('tender', {
+    const { block, contract, onChain } = await addProcurementRecordAsync('tender', {
       action: 'publish',
       tenderId,
       title: tender.title,
@@ -106,7 +106,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       contractId: contract.id,
       transactionHash: contract.transactionHash,
       timestamp: new Date().toISOString(),
-      verified: true,
+      verified: onChain, simulated: !onChain, onChain,
     };
 
     setTenders(updatedTenders);
@@ -461,6 +461,10 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                     }}>
                       {tender.status === 'published' ? t('preTender.published') : t('preTender.draft')}
                     </span>
+                    {' '}
+                    {blockchainRecords.some(r => r.tenderId === tender.id && r.onChain) && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                    )}
                   </td>
                   <td style={{ padding: 10, borderBottom: idx === tenders.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
                     {tender.status === 'draft' && (

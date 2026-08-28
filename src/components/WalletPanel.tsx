@@ -26,15 +26,19 @@ export function WalletPanel({
   const [amount, setAmount] = useState<number | ''>('');
   const { t } = useTranslation();
 
+  const MAX_MINT_BALANCE = 5000;
+  const canMint = balance < MAX_MINT_BALANCE;
+
   const handleMint = () => {
-    const minted = 1000;
+    if (!canMint) return;
+    const minted = Math.min(1000, MAX_MINT_BALANCE - balance);
     setBalance(balance + minted);
     const block = blockchain.addBlock({ type: 'token_mint', amount: minted, timestamp: Date.now() });
     const tx = { id: block.hash, type: 'mint', amount: minted, timestamp: Date.now() };
     setTransactions([tx, ...transactions]);
     setBlockchainRecords([
       ...blockchainRecords,
-      { id: block.hash, type: 'token_mint', amount: minted, transactionHash: block.hash, timestamp: Date.now(), verified: true },
+      { id: block.hash, type: 'token_mint', amount: minted, transactionHash: block.hash, timestamp: Date.now(), verified: false, simulated: true },
     ]);
   };
 
@@ -50,7 +54,7 @@ export function WalletPanel({
     setTransactions([tx, ...transactions]);
     setBlockchainRecords([
       ...blockchainRecords,
-      { id: block.hash, type: 'token_transfer', to: recipient, amount: Number(amount), transactionHash: block.hash, timestamp: Date.now(), verified: true },
+      { id: block.hash, type: 'token_transfer', to: recipient, amount: Number(amount), transactionHash: block.hash, timestamp: Date.now(), verified: false, simulated: true },
     ]);
 
     setRecipient('');
@@ -71,7 +75,7 @@ export function WalletPanel({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleMint} className="flex items-center gap-2 px-3 py-1 bg-green-600 text-white rounded focus:ring-2 focus:ring-green-400 focus:outline-none">
+            <button onClick={handleMint} disabled={!canMint} className={`flex items-center gap-2 px-3 py-1 rounded focus:ring-2 focus:ring-green-400 focus:outline-none ${canMint ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
               <PlusCircle className="w-4 h-4" /> {t('wallet.mint')}
             </button>
             <button onClick={onClose} aria-label="Close" className="p-2 rounded hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none">

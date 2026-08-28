@@ -1,36 +1,22 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Shield, CheckCircle, Hash, Clock, FileText, Search, TrendingUp, Coins } from 'lucide-react';
+import { Link as LinkIcon, Shield, CheckCircle, Hash, Clock, FileText, Search, TrendingUp } from 'lucide-react';
 import { blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface BlockchainDashboardProps {
   blockchainRecords: any[];
   userRole: string;
-  walletBalance: number;
-  setWalletBalance: (v: number) => void;
-  walletTxs: any[];
-  setWalletTxs: (txs: any[]) => void;
 }
 
-export function BlockchainDashboard({ blockchainRecords, userRole, walletBalance, setWalletBalance, walletTxs, setWalletTxs }: BlockchainDashboardProps) {
+export function BlockchainDashboard({ blockchainRecords, userRole }: BlockchainDashboardProps) {
   const [searchHash, setSearchHash] = useState('');
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [verifiedRecords, setVerifiedRecords] = useState<Set<string>>(new Set());
-  const [rewardNotification, setRewardNotification] = useState<{ id: string; amount: number } | null>(null);
   const { t } = useTranslation();
 
   const handleVerify = (recordId: string) => {
     if (verifiedRecords.has(recordId) || userRole !== 'citizen') return;
-    const reward = 10;
-    const rewardBlock = blockchain.addBlock({ type: 'citizen_verify_reward', recordId, amount: reward, timestamp: Date.now() });
-    setWalletBalance(walletBalance + reward);
-    setWalletTxs([
-      { id: rewardBlock.hash, type: 'reward', label: t('rewards.verifyRecord'), amount: reward, timestamp: Date.now() },
-      ...walletTxs,
-    ]);
     setVerifiedRecords(new Set([...verifiedRecords, recordId]));
-    setRewardNotification({ id: recordId, amount: reward });
-    setTimeout(() => setRewardNotification(null), 4000);
   };
 
   const chain = blockchain.getChain();
@@ -84,14 +70,6 @@ export function BlockchainDashboard({ blockchainRecords, userRole, walletBalance
         <p className="text-gray-600 mt-1">{t('blockchain.subtitle')}</p>
       </div>
 
-      {/* Reward Notification */}
-      {rewardNotification && (
-        <div className="bg-green-50 border border-green-300 rounded-lg p-4 flex items-center gap-3">
-          <Coins className="w-5 h-5 text-green-600" />
-          <span className="flex-1 text-green-900 font-semibold">{t('rewards.awarded')}</span>
-          <span className="text-green-800 font-bold text-lg">+{rewardNotification.amount} TOK</span>
-        </div>
-      )}
 
       {/* Blockchain Status */}
       <div className="grid grid-cols-4 gap-4">
@@ -218,12 +196,21 @@ export function BlockchainDashboard({ blockchainRecords, userRole, walletBalance
                           >
                             {record.type.replace(/_/g, ' ').toUpperCase()}
                           </span>
-                          {record.verified && (
+                          {record.onChain ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-full text-xs font-medium">
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              {t('blockchain.onChain')}
+                            </span>
+                          ) : record.simulated ? (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-medium">
+                              {t('blockchain.simulated')}
+                            </span>
+                          ) : record.verified ? (
                             <span className="flex items-center gap-1 text-green-700">
                               <CheckCircle className="w-4 h-4" />
                               {t('blockchain.verified')}
                             </span>
-                          )}
+                          ) : null}
                           {userRole === 'citizen' && !verifiedRecords.has(record.id) && (
                             <button
                               type="button"

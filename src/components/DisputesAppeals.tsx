@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Scale, FileUp, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
-import { addProcurementRecord } from '../utils/blockchain';
+import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface DisputesAppealsProps {
@@ -22,7 +22,7 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
     evidence: null as File | null,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.tenderId || !form.grounds) return;
 
@@ -40,11 +40,27 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
     const updated = [...disputes, newDispute];
     setDisputes(updated);
 
-    addProcurementRecord(
-      { type: 'objection_filed', objectionId: newDispute.id, tenderId: form.tenderId, timestamp: Date.now() },
-      setBlockchainRecords,
-      blockchainRecords
-    );
+    const { block, contract, success, onChain } = await addProcurementRecordAsync('objection', {
+      disputeId: newDispute.id,
+      objectionId: newDispute.id,
+      tenderId: form.tenderId,
+      title: newDispute.grounds,
+      timestamp: Date.now(),
+    });
+
+    if (success) {
+      setBlockchainRecords([...blockchainRecords, {
+        id: block.hash,
+        type: 'objection_filed',
+        disputeId: newDispute.id,
+        contractId: contract.id,
+        transactionHash: contract.transactionHash,
+        timestamp: new Date().toISOString(),
+        verified: onChain,
+        simulated: !onChain,
+        onChain,
+      }]);
+    }
 
     setSubmittedId(newDispute.id);
     setSubmitted(true);
@@ -233,6 +249,10 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
                        dispute.status === 'resolved' ? t('disputes.statusResolved') :
                        dispute.status}
                     </span>
+                    {' '}
+                    {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                    )}
                   </td>
                 </tr>
               ))}

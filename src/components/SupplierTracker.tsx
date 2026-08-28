@@ -8,7 +8,7 @@ import {
   CheckCircle,
   Clock,
   TrendingUp,
-  DollarSign,
+  Banknote,
   Eye,
   ChevronRight,
 } from 'lucide-react';
@@ -225,7 +225,7 @@ export function SupplierTracker({
 
         <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between mb-2">
-            <DollarSign className="w-8 h-8 opacity-100" />
+            <Banknote className="w-8 h-8 opacity-100" />
             <CheckCircle className="w-6 h-6 opacity-100" />
           </div>
           <p className="opacity-100 text-sm">{t('supplier.myContracts')}</p>

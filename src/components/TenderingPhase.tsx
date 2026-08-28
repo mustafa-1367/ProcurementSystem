@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FileText, DollarSign, Calendar, Building, Send, Eye, Shield, TrendingDown } from 'lucide-react';
-import { addProcurementRecord } from '../utils/blockchain';
+import { FileText, Banknote, Calendar, Building, Send, Eye, Shield, TrendingDown, Lock } from 'lucide-react';
+import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface TenderingPhaseProps {
@@ -36,7 +36,7 @@ export function TenderingPhase({
 
   const publishedTenders = tenders.filter((td) => td.status === 'published');
 
-  const handleSubmitBid = (e: React.FormEvent) => {
+  const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newBid = {
@@ -50,7 +50,7 @@ export function TenderingPhase({
       score: null,
     };
 
-    const { block, contract } = addProcurementRecord('bid', {
+    const { block, contract, onChain } = await addProcurementRecordAsync('bid', {
       tenderId: selectedTender.id,
       amount: bidForm.amount,
       vendor: bidForm.vendorName,
@@ -64,7 +64,7 @@ export function TenderingPhase({
       contractId: contract.id,
       transactionHash: contract.transactionHash,
       timestamp: new Date().toISOString(),
-      verified: true,
+      verified: onChain, simulated: !onChain, onChain,
     };
 
     setBids([...bids, newBid]);
@@ -109,6 +109,7 @@ export function TenderingPhase({
               const daysRemaining = Math.ceil(
                 (new Date(tender.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
               );
+              const deadlinePassed = new Date(tender.deadline).getTime() <= Date.now();
 
               return (
                 <div key={tender.id} className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
@@ -120,6 +121,9 @@ export function TenderingPhase({
                           <span className="px-3 py-1 bg-green-100 text-green-900 rounded-full">
                             {t('tendering.openForBidding')}
                           </span>
+                          {blockchainRecords.some(r => r.tenderId === tender.id && r.onChain) && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                          )}
                         </div>
                         <p className="text-gray-600">{tender.description}</p>
                       </div>
@@ -131,7 +135,7 @@ export function TenderingPhase({
                         <span>{tender.department}</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-700">
-                        <DollarSign className="w-4 h-4" />
+                        <Banknote className="w-4 h-4" />
                         <span>{Number(tender.budget).toLocaleString()} {t('tendering.afn')}</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-700">
@@ -163,17 +167,24 @@ export function TenderingPhase({
                           {t('tendering.submitBid')}
                         </button>
                       )}
-                      <button
-                        onClick={() => setSelectedTender(selectedTender?.id === tender.id ? null : tender)}
-                        className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                        {t('tendering.viewBids')} ({tenderBids.length})
-                      </button>
+                      {deadlinePassed ? (
+                        <button
+                          onClick={() => setSelectedTender(selectedTender?.id === tender.id ? null : tender)}
+                          className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                          {t('tendering.viewBids')} ({tenderBids.length})
+                        </button>
+                      ) : (
+                        <span className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm font-medium">
+                          <Lock className="w-4 h-4" />
+                          {t('audit.bidsSealed')} ({tenderBids.length})
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {selectedTender?.id === tender.id && !showBidForm && tenderBids.length > 0 && (
+                  {selectedTender?.id === tender.id && !showBidForm && tenderBids.length > 0 && deadlinePassed && (
                     <div className="border-t border-gray-200 p-6 bg-gray-50">
                       <h4 className="text-gray-900 mb-4">{t('tendering.submittedBids')}</h4>
                       <div className="space-y-3">
@@ -187,10 +198,13 @@ export function TenderingPhase({
                                     <Shield className="w-4 h-4" />
                                     {t('tendering.verified')}
                                   </span>
+                                  {blockchainRecords.some(r => r.bidId === bid.id && r.onChain) && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                                  )}
                                 </div>
                                 <div className="grid grid-cols-3 gap-4 text-gray-600">
                                   <div className="flex items-center gap-2">
-                                    <DollarSign className="w-4 h-4" />
+                                    <Banknote className="w-4 h-4" />
                                     {Number(bid.amount).toLocaleString()} {t('tendering.afn')}
                                   </div>
                                   <div className="flex items-center gap-2">

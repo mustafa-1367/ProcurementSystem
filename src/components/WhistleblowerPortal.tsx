@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AlertTriangle, Shield, Eye, EyeOff, Lock, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins } from 'lucide-react';
-import { addProcurementRecord, blockchain } from '../utils/blockchain';
+import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface WhistleblowerPortalProps {
@@ -10,18 +10,7 @@ interface WhistleblowerPortalProps {
   contracts: any[];
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
-  walletBalance: number;
-  setWalletBalance: (v: number) => void;
-  walletTxs: any[];
-  setWalletTxs: (txs: any[]) => void;
 }
-
-const SEVERITY_REWARDS: Record<string, number> = {
-  low: 100,
-  medium: 250,
-  high: 500,
-  critical: 1000,
-};
 
 export function WhistleblowerPortal({
   reports,
@@ -30,10 +19,6 @@ export function WhistleblowerPortal({
   contracts,
   setBlockchainRecords,
   blockchainRecords,
-  walletBalance,
-  setWalletBalance,
-  walletTxs,
-  setWalletTxs,
 }: WhistleblowerPortalProps) {
   const [showReportForm, setShowReportForm] = useState(false);
   const [anonymousMode, setAnonymousMode] = useState(true);
@@ -48,7 +33,6 @@ export function WhistleblowerPortal({
   });
   const [zkProof, setZkProof] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [rewardNotification, setRewardNotification] = useState<{ amount: number; severity: string } | null>(null);
   const { t } = useTranslation();
 
   const getFileIcon = (file: File) => {
@@ -75,18 +59,20 @@ export function WhistleblowerPortal({
   };
 
   const generateZKProof = () => {
-    // Simulate Zero-Knowledge Proof generation
-    const proof = `ZKP-${Math.random().toString(36).substr(2, 16).toUpperCase()}`;
+    // ⚠️ SIMULATED — Not a real Zero-Knowledge Proof. In production, this would use
+    // a ZKP library (e.g., snarkjs, circom) with proper cryptographic circuits.
+    const proof = `SIM-ZKP-${Math.random().toString(36).substr(2, 16).toUpperCase()}`;
     setZkProof(proof);
     return proof;
   };
 
-  const handleSubmitReport = (e: React.FormEvent) => {
+  const handleSubmitReport = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const proof = generateZKProof();
     
-    const rewardAmount = SEVERITY_REWARDS[reportForm.severity] || 100;
+    const severityRewards: Record<string, number> = { low: 100, medium: 250, high: 500, critical: 1000 };
+    const rewardAmount = severityRewards[reportForm.severity] || 100;
 
     const newReport = {
       id: `RPT-${Date.now()}`,
@@ -99,12 +85,12 @@ export function WhistleblowerPortal({
       rewards: {
         eligible: true,
         amount: rewardAmount,
-        status: 'awarded',
+        status: 'pending_investigation',
       },
     };
 
     // Add to blockchain with ZK proof
-    const { block, contract } = addProcurementRecord('whistleblower_report', {
+    const { block, contract, onChain } = await addProcurementRecordAsync('whistleblower_report', {
       reportId: newReport.id,
       zkProof: proof,
       category: reportForm.category,
@@ -120,23 +106,17 @@ export function WhistleblowerPortal({
       transactionHash: contract.transactionHash,
       zkProof: proof,
       timestamp: new Date().toISOString(),
-      verified: true,
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
     };
 
-    // Award TOK to wallet
-    const rewardBlock = blockchain.addBlock({ type: 'whistleblower_reward', reportId: newReport.id, amount: rewardAmount, timestamp: Date.now() });
-    setWalletBalance(walletBalance + rewardAmount);
-    setWalletTxs([
-      { id: rewardBlock.hash, type: 'reward', label: `Whistleblower reward (${reportForm.severity})`, amount: rewardAmount, timestamp: Date.now() },
-      ...walletTxs,
-    ]);
+    // Reward is NOT awarded immediately — it will be released after investigation is completed.
 
     setReports([...reports, newReport]);
     setBlockchainRecords([...blockchainRecords, blockchainRecord]);
     setShowReportForm(false);
     setUploadedFiles([]);
-    setRewardNotification({ amount: rewardAmount, severity: reportForm.severity });
-    setTimeout(() => setRewardNotification(null), 5000);
     setReportForm({
       title: '',
       category: '',
@@ -180,22 +160,6 @@ export function WhistleblowerPortal({
         </button>
       </div>
 
-      {/* Reward Notification */}
-      {rewardNotification && (
-        <div className="bg-green-50 border border-green-300 rounded-lg p-4 flex items-center gap-3 animate-pulse">
-          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-            <Coins className="w-5 h-5 text-green-600" />
-          </div>
-          <div className="flex-1">
-            <p className="text-green-900 font-semibold">{t('whistleblower.rewardAwarded')}</p>
-            <p className="text-green-700 text-sm">
-              {t('whistleblower.rewardForSeverity')} {rewardNotification.severity}
-            </p>
-          </div>
-          <div className="text-green-800 font-bold text-lg">+{rewardNotification.amount} TOK</div>
-        </div>
-      )}
-
       {/* Protection Features */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow-md p-6">
@@ -204,7 +168,7 @@ export function WhistleblowerPortal({
             <Lock className="w-6 h-6 opacity-60" />
           </div>
           <p className="opacity-100">{t('whistleblower.zkpProtection')}</p>
-          <p className="mt-1">{t('whistleblower.guaranteedAnonymity')}</p>
+          <p className="mt-1 text-sm opacity-80">{t('whistleblower.zkpSimulated')}</p>
         </div>
 
         <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow-md p-6">
@@ -481,6 +445,9 @@ export function WhistleblowerPortal({
                             {t('whistleblower.zkpProtection')}
                           </span>
                         )}
+                        {blockchainRecords.some(r => r.reportId === report.id && r.onChain) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                        )}
                       </div>
 
                       <p className="text-gray-600 mb-3">{report.description}</p>
@@ -508,16 +475,16 @@ export function WhistleblowerPortal({
                       )}
 
                       {report.rewards.eligible && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
+                        <div className={`${report.rewards.status === 'awarded' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-lg p-3 flex items-center justify-between`}>
                           <div className="flex items-center gap-2">
-                            <Coins className="w-4 h-4 text-green-600" />
-                            <p className="text-green-800">
+                            <Coins className={`w-4 h-4 ${report.rewards.status === 'awarded' ? 'text-green-600' : 'text-amber-600'}`} />
+                            <p className={report.rewards.status === 'awarded' ? 'text-green-800' : 'text-amber-800'}>
                               {report.rewards.status === 'awarded'
                                 ? `${t('whistleblower.rewardReceived')} (${report.rewards.amount} TOK)`
-                                : t('whistleblower.rewardEligible')}
+                                : t('whistleblower.rewardPendingInvestigation')}
                             </p>
                           </div>
-                          {report.rewards.amount > 0 && (
+                          {report.rewards.status === 'awarded' && report.rewards.amount > 0 && (
                             <span className="text-green-700 font-bold">+{report.rewards.amount} TOK</span>
                           )}
                         </div>

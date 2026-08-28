@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Eye, Search, Download, TrendingUp, DollarSign, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Flag, Coins } from 'lucide-react';
-import { blockchain } from '../utils/blockchain';
+import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Flag } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 
 interface PublicAuditDashboardProps {
@@ -9,33 +8,19 @@ interface PublicAuditDashboardProps {
   contracts: any[];
   blockchainRecords: any[];
   userRole: string;
-  walletBalance: number;
-  setWalletBalance: (v: number) => void;
-  walletTxs: any[];
-  setWalletTxs: (txs: any[]) => void;
 }
 
-export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole, walletBalance, setWalletBalance, walletTxs, setWalletTxs }: PublicAuditDashboardProps) {
+export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole }: PublicAuditDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState('all');
   const [flaggedTenders, setFlaggedTenders] = useState<Set<string>>(new Set());
-  const [rewardNotification, setRewardNotification] = useState<{ id: string; amount: number } | null>(null);
   const { t } = useTranslation();
 
   const handleFlag = (tenderId: string) => {
     if (flaggedTenders.has(tenderId) || userRole !== 'citizen') return;
-    const reward = 20;
-    const rewardBlock = blockchain.addBlock({ type: 'citizen_flag_reward', tenderId, amount: reward, timestamp: Date.now() });
-    setWalletBalance(walletBalance + reward);
-    setWalletTxs([
-      { id: rewardBlock.hash, type: 'reward', label: t('rewards.flagTender'), amount: reward, timestamp: Date.now() },
-      ...walletTxs,
-    ]);
     setFlaggedTenders(new Set([...flaggedTenders, tenderId]));
-    setRewardNotification({ id: tenderId, amount: reward });
-    setTimeout(() => setRewardNotification(null), 4000);
   };
 
   const totalBudget = tenders.reduce((sum, tender) => sum + Number(tender.budget || 0), 0);
@@ -80,20 +65,11 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
         </button>
       </div>
 
-      {/* Reward Notification */}
-      {rewardNotification && (
-        <div className="bg-green-50 border border-green-300 rounded-lg p-4 flex items-center gap-3">
-          <Coins className="w-5 h-5 text-green-600" />
-          <span className="flex-1 text-green-900 font-semibold">{t('rewards.awarded')}</span>
-          <span className="text-green-800 font-bold text-lg">+{rewardNotification.amount} TOK</span>
-        </div>
-      )}
-
       {/* Key Metrics */}
       <div className="grid grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between mb-2">
-            <DollarSign className="w-8 h-8 opacity-100" />
+            <Banknote className="w-8 h-8 opacity-100" />
             <Activity className="w-6 h-6 opacity-100" />
           </div>
           <p className="opacity-100">{t('audit.totalBudget')}</p>
@@ -253,14 +229,20 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                       {tenderBids.length > 0 && (
                         <div className="bg-gray-50 p-4 rounded-lg mb-3">
                           <p className="text-gray-700 mb-2">{tenderBids.length} {t('audit.bidsReceived')}</p>
-                          <div className="space-y-2">
-                            {tenderBids.map((bid, idx) => (
-                              <div key={bid.id} className="flex items-center justify-between text-gray-600">
-                                <span>{t('audit.bid')}#{idx + 1}: {bid.vendorName}</span>
-                                <span>{Number(bid.amount).toLocaleString()} {t('audit.afn')}</span>
-                              </div>
-                            ))}
-                          </div>
+                          {new Date(tender.deadline) <= new Date() ? (
+                            <div className="space-y-2">
+                              {tenderBids.map((bid, idx) => (
+                                <div key={bid.id} className="flex items-center justify-between text-gray-600">
+                                  <span>{t('audit.bid')}#{idx + 1}: {bid.vendorName}</span>
+                                  <span>{Number(bid.amount).toLocaleString()} {t('audit.afn')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                              <span className="text-sm font-medium">{t('audit.bidsSealed')}</span>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -325,7 +307,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           payment_processed: LinkIcon,
           dispute_raised: Shield,
           report_submitted: Eye,
-          wallet_transaction: DollarSign,
+          wallet_transaction: Banknote,
         };
 
         const getRecordDetails = (record: any) => {
@@ -467,6 +449,9 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                   <Clock className="w-3 h-3" />
                                   {t('audit.unverified')}
                                 </span>
+                              )}
+                              {record.onChain && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
                               )}
                             </div>
                           )}

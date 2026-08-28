@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Send, FileText, DollarSign, Calendar, Building, Eye, Upload, ShieldCheck } from 'lucide-react';
-import { addProcurementRecord } from '../utils/blockchain';
+import { Send, FileText, Banknote, Calendar, Building, Eye, Upload, ShieldCheck } from 'lucide-react';
+import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
 interface SubmitBidProps {
@@ -26,7 +26,7 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
   const publishedTenders = tenders.filter((td) => td.status === 'published');
   const myBids = bids;
 
-  const handleSubmitBid = (e: React.FormEvent) => {
+  const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTender) return;
 
@@ -44,11 +44,27 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
     const updatedBids = [...bids, newBid];
     setBids(updatedBids);
 
-    addProcurementRecord(
-      { type: 'bid_submission', bidId: newBid.id, tenderId: selectedTender.id, vendor: bidForm.vendorName, amount: bidForm.amount, timestamp: Date.now() },
-      setBlockchainRecords,
-      blockchainRecords
-    );
+    const { block, contract, success, onChain } = await addProcurementRecordAsync('bid_submission', {
+      bidId: newBid.id,
+      tenderId: selectedTender.id,
+      vendor: bidForm.vendorName,
+      amount: bidForm.amount,
+      timestamp: Date.now(),
+    });
+
+    if (success) {
+      setBlockchainRecords([...blockchainRecords, {
+        id: block.hash,
+        type: 'bid_submitted',
+        bidId: newBid.id,
+        contractId: contract.id,
+        transactionHash: contract.transactionHash,
+        timestamp: new Date().toISOString(),
+        verified: onChain,
+        simulated: !onChain,
+        onChain,
+      }]);
+    }
 
     setBidForm({ vendorName: '', vendorEmail: '', amount: '', timeline: '' });
     setShowBidForm(false);
@@ -75,13 +91,18 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                   <div className="text-sm font-medium text-gray-900">{bid.tenderTitle}</div>
                   <div className="text-sm text-gray-500">{bid.id} &middot; {new Date(bid.submittedAt).toLocaleDateString()}</div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                  bid.status === 'submitted' ? 'bg-blue-50 text-blue-700' :
-                  bid.status === 'awarded' ? 'bg-green-50 text-green-700' :
-                  'bg-gray-100 text-gray-600'
-                }`}>
-                  {bid.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                    bid.status === 'submitted' ? 'bg-blue-50 text-blue-700' :
+                    bid.status === 'awarded' ? 'bg-green-50 text-green-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {bid.status}
+                  </span>
+                  {blockchainRecords.some(r => r.bidId === bid.id && r.onChain) && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -199,7 +220,7 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    <DollarSign className="w-4 h-4 inline me-1" />
+                    <Banknote className="w-4 h-4 inline me-1" />
                     {t('submitBid.amount')} (AFN) *
                   </label>
                   <input
