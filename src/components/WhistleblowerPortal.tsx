@@ -504,7 +504,7 @@ export function WhistleblowerPortal({
                 multiple
                 accept="image/*,video/*,.pdf"
                 onChange={handleFileChange}
-                className="hidden"
+                style={{ display: 'none' }}
               />
 
               {uploadedFiles.length > 0 && (
