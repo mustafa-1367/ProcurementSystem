@@ -9,9 +9,10 @@ interface SubmitBidProps {
   setBids: (bids: any[]) => void;
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
+  registeredSuppliers: any[];
 }
 
-export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockchainRecords }: SubmitBidProps) {
+export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockchainRecords, registeredSuppliers }: SubmitBidProps) {
   const { t } = useTranslation();
   const [selectedTender, setSelectedTender] = useState<any>(null);
   const [viewTender, setViewTender] = useState<any>(null);
@@ -23,8 +24,11 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
     timeline: '',
   });
 
+  const [eligibilityError, setEligibilityError] = useState(false);
+
   const publishedTenders = tenders.filter((td) => td.status === 'published');
   const myBids = bids;
+  const isEligible = registeredSuppliers.length > 0;
 
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +113,17 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
         </div>
       )}
 
+      {/* Eligibility Warning */}
+      {eligibilityError && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <ShieldCheck style={{ width: 24, height: 24, color: '#dc2626', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#991b1b' }}>Registration Required</div>
+            <div style={{ fontSize: 13, color: '#7f1d1d' }}>You must complete KYC registration before submitting bids. Go to the <strong>Register (e-KYC)</strong> tab to register your company first.</div>
+          </div>
+        </div>
+      )}
+
       {/* Available Tenders */}
       <div className="bg-white rounded-lg shadow-md border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -133,7 +148,12 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                       <Eye className="w-4 h-4" /> {t('submitBid.view')}
                     </button>
                     <button
-                      onClick={() => { setSelectedTender(tender); setShowBidForm(true); }}
+                      onClick={() => {
+                        if (!isEligible) { setEligibilityError(true); return; }
+                        setEligibilityError(false);
+                        setSelectedTender(tender);
+                        setShowBidForm(true);
+                      }}
                       className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700"
                     >
                       <Send className="w-4 h-4" /> {t('submitBid.submitBtn')}

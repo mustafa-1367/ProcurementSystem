@@ -5,6 +5,7 @@ import { useTranslation } from '../utils/i18n';
 
 interface TenderingPhaseProps {
   tenders: any[];
+  setTenders: (tenders: any[]) => void;
   bids: any[];
   setBids: (bids: any[]) => void;
   setBlockchainRecords: (records: any[]) => void;
@@ -15,6 +16,7 @@ interface TenderingPhaseProps {
 
 export function TenderingPhase({
   tenders,
+  setTenders,
   bids,
   setBids,
   setBlockchainRecords,
@@ -176,10 +178,25 @@ export function TenderingPhase({
                           {t('tendering.viewBids')} ({tenderBids.length})
                         </button>
                       ) : (
-                        <span className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm font-medium">
-                          <Lock className="w-4 h-4" />
-                          {t('audit.bidsSealed')} ({tenderBids.length})
-                        </span>
+                        <>
+                          <span className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm font-medium">
+                            <Lock className="w-4 h-4" />
+                            {t('audit.bidsSealed')} ({tenderBids.length})
+                          </span>
+                          {userRole === 'government' && (
+                            <button
+                              onClick={() => {
+                                const updated = tenders.map((td) =>
+                                  td.id === tender.id ? { ...td, deadline: new Date(Date.now() - 1000).toISOString() } : td
+                                );
+                                setTenders(updated);
+                              }}
+                              style={{ fontSize: '11.5px', padding: '6px 10px', borderRadius: 8, border: '1px dashed #d1d5db', background: '#f9fafb', color: '#6b7280', cursor: 'pointer', fontWeight: 600 }}
+                            >
+                              Skip to Deadline (Demo)
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

@@ -88,7 +88,7 @@ export function MyContracts({ contracts, bids, tenders }: MyContractsProps) {
                       {contract.milestones.map((m: any, i: number) => (
                         <div
                           key={i}
-                          className={`h-2 flex-1 rounded-full ${m.completed ? 'bg-green-400' : 'bg-gray-200'}`}
+                          className={`h-2 flex-1 rounded-full ${m.status === 'paid' || m.completed ? 'bg-green-400' : 'bg-gray-200'}`}
                         />
                       ))}
                     </div>

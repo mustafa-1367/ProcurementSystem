@@ -14,13 +14,12 @@ import { SubmitBid } from './components/SubmitBid';
 import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Shield } from 'lucide-react';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale } from 'lucide-react';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
 import { loadSharedState, saveSharedState } from './utils/sharedStorage';
 import { useWeb3 } from './utils/useWeb3';
-import { getDeploymentInfo } from './utils/web3Provider';
 
 
 type UserRole = 'citizen' | 'supplier' | 'government' | 'auditor' | 'oversight';
@@ -51,15 +50,14 @@ const allTabs = [
   { id: 'submitBid',    icon: Send },
   { id: 'myContracts',  icon: Briefcase },
   { id: 'disputes',     icon: Scale },
-  { id: 'admin',        icon: Shield },
 ];
 
 const roleTabs: Record<UserRole, string[]> = {
-  government: ['dashboard', 'pre', 'tender', 'post', 'audit', 'reputation', 'dao', 'admin'],
+  government: ['dashboard', 'pre', 'tender', 'post'],
   supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'audit', 'reputation', 'whistleblower'],
   citizen:    ['dashboard', 'audit', 'reputation', 'dao', 'whistleblower'],
-  auditor:    ['dashboard', 'audit', 'reputation'],
-  oversight:  ['dashboard', 'dao', 'whistleblower', 'audit', 'reputation'],
+  auditor:    ['dashboard', 'audit', 'reputation', 'supplier'],
+  oversight:  ['dashboard', 'dao', 'whistleblower', 'audit', 'reputation', 'supplier'],
 };
 
 const roleFirstTab: Record<UserRole, string> = {
@@ -70,134 +68,6 @@ const roleFirstTab: Record<UserRole, string> = {
   oversight: 'dashboard',
 };
 
-const ASSIGNABLE_ROLES: { value: number; label: string }[] = [
-  { value: 1, label: 'citizen' },
-  { value: 2, label: 'supplier' },
-  { value: 3, label: 'government' },
-  { value: 4, label: 'auditor' },
-  { value: 5, label: 'oversight' },
-];
-
-function AdminPanel({ procurementContract, t }: { procurementContract: any; t: (key: string) => string }) {
-  const [address, setAddress] = useState('');
-  const [selectedRole, setSelectedRole] = useState(4); // default to Auditor
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [lookupAddress, setLookupAddress] = useState('');
-  const [lookupResult, setLookupResult] = useState<string | null>(null);
-
-  const handleAssign = async () => {
-    if (!procurementContract || !address) return;
-    setLoading(true);
-    setResult(null);
-    try {
-      const tx = await procurementContract.assignRole(address, selectedRole);
-      await tx.wait();
-      const roleName = ASSIGNABLE_ROLES.find((r) => r.value === selectedRole)?.label || 'Unknown';
-      setResult({ type: 'success', message: `${t(`role.${roleName}`)} role assigned to ${address.slice(0, 6)}…${address.slice(-4)}` });
-      setAddress('');
-    } catch (err: any) {
-      setResult({ type: 'error', message: err?.reason || err?.message || 'Transaction failed' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLookup = async () => {
-    if (!procurementContract || !lookupAddress) return;
-    try {
-      const roleNum = await procurementContract.getRole(lookupAddress);
-      const role = ASSIGNABLE_ROLES.find((r) => r.value === Number(roleNum));
-      setLookupResult(role ? t(`role.${role.label}`) : t('admin.noRole'));
-    } catch {
-      setLookupResult(t('admin.lookupFailed'));
-    }
-  };
-
-  return (
-    <div style={{ maxWidth: 600 }}>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0f2942', marginBottom: 4 }}>{t('admin.title')}</h2>
-      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>{t('admin.desc')}</p>
-
-      {/* Assign Role */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 20 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f2942', marginBottom: 16 }}>{t('admin.assignRole')}</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>{t('admin.walletAddress')}</label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="0x..."
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'monospace' }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 4 }}>{t('admin.selectRole')}</label>
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(Number(e.target.value))}
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
-            >
-              {ASSIGNABLE_ROLES.map((r) => (
-                <option key={r.value} value={r.value}>{t(`role.${r.label}`)}</option>
-              ))}
-            </select>
-          </div>
-          <button
-            onClick={handleAssign}
-            disabled={loading || !address}
-            style={{
-              padding: '12px 20px', borderRadius: 8, border: 'none',
-              background: loading ? '#9ca3af' : '#0f2942', color: '#fff',
-              fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {loading ? t('admin.assigning') : t('admin.assignBtn')}
-          </button>
-          {result && (
-            <div style={{
-              padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-              background: result.type === 'success' ? '#d1fae5' : '#fee2e2',
-              color: result.type === 'success' ? '#065f46' : '#991b1b',
-            }}>
-              {result.message}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Lookup Role */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0f2942', marginBottom: 16 }}>{t('admin.lookupRole')}</h3>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type="text"
-            value={lookupAddress}
-            onChange={(e) => setLookupAddress(e.target.value)}
-            placeholder="0x..."
-            style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'monospace' }}
-          />
-          <button
-            onClick={handleLookup}
-            disabled={!lookupAddress}
-            style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#f9fafb', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
-          >
-            {t('admin.lookupBtn')}
-          </button>
-        </div>
-        {lookupResult && (
-          <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 8, background: '#eff6ff', color: '#1e40af', fontSize: 14, fontWeight: 600 }}>
-            {lookupResult}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
 function AppContent() {
   const [activePhase, setActivePhase] = useState<string>('dashboard');
   const [tenders, setTenders] = useState<any[]>([]);
@@ -207,6 +77,7 @@ function AppContent() {
   const [disputes, setDisputes] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [reputationScores, setReputationScores] = useState<any[]>([]);
+  const [registeredSuppliers, setRegisteredSuppliers] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   // Load shared state from Firebase on mount
@@ -220,6 +91,7 @@ function AppContent() {
         if (data.disputes) setDisputes(data.disputes);
         if (data.reports) setReports(data.reports);
         if (data.reputationScores) setReputationScores(data.reputationScores);
+        if (data.registeredSuppliers) setRegisteredSuppliers(data.registeredSuppliers);
       }
       setLoaded(true);
     });
@@ -228,8 +100,8 @@ function AppContent() {
   // Save to Firebase on any change (only after initial load)
   useEffect(() => {
     if (!loaded) return;
-    saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores });
-  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, loaded]);
+    saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers });
+  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, loaded]);
   const { t, language, setLanguage, dir } = useTranslation();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('citizen');
@@ -241,7 +113,6 @@ function AppContent() {
   const langMenuRef = useRef<HTMLDivElement>(null);
 
   const { connected, account, procurementContract, isCorrectNetwork } = useWeb3();
-  const isOwner = connected && account?.toLowerCase() === getDeploymentInfo().deployer.toLowerCase();
 
   // Fetch role from smart contract when wallet connects
   useEffect(() => {
@@ -313,7 +184,7 @@ function AppContent() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showLangMenu]);
 
-  const visibleTabIds = roleTabs[userRole].filter((id) => id !== 'admin' || isOwner);
+  const visibleTabIds = roleTabs[userRole];
   const visibleTabs = visibleTabIds.map((id) => allTabs.find((tab) => tab.id === id)!).filter(Boolean);
 
   // Arrow key navigation for tablist
@@ -501,7 +372,7 @@ function AppContent() {
           >
             {visibleTabs.map((tab, index) => {
               const isActive = activePhase === tab.id;
-              const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id === 'admin' ? 'admin' : tab.id;
+              const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id;
               return (
                 <button
                   key={tab.id}
@@ -563,6 +434,7 @@ function AppContent() {
         {activePhase === 'tender' && (
           <TenderingPhase
             tenders={tenders}
+            setTenders={setTenders}
             bids={bids}
             setBids={setBids}
             setBlockchainRecords={setBlockchainRecords}
@@ -582,6 +454,11 @@ function AppContent() {
             blockchainRecords={blockchainRecords}
             setReputationScores={setReputationScores}
             reputationScores={reputationScores}
+            reports={reports}
+            setReports={setReports}
+            disputes={disputes}
+            setDisputes={setDisputes}
+            userRole={userRole}
           />
         )}
         {activePhase === 'audit' && (
@@ -635,6 +512,8 @@ function AppContent() {
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
             userRole={userRole}
+            registeredSuppliers={registeredSuppliers}
+            setRegisteredSuppliers={setRegisteredSuppliers}
           />
         )}
         {activePhase === 'submitBid' && (
@@ -644,6 +523,7 @@ function AppContent() {
             setBids={setBids}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
+            registeredSuppliers={registeredSuppliers}
           />
         )}
         {activePhase === 'myContracts' && (
@@ -662,9 +542,6 @@ function AppContent() {
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
           />
-        )}
-        {activePhase === 'admin' && isOwner && (
-          <AdminPanel procurementContract={procurementContract} t={t} />
         )}
         {activePhase === 'help' && (
           <HelpSupport />
