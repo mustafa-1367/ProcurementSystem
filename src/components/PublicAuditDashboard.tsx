@@ -23,10 +23,16 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
     setFlaggedTenders(new Set([...flaggedTenders, tenderId]));
   };
 
-  const totalBudget = tenders.reduce((sum, tender) => sum + Number(tender.budget || 0), 0);
-  const totalAwarded = contracts.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+  const totalBudget = tenders.reduce((sum, tender) => {
+    const b = Number(tender.budget);
+    return sum + (isNaN(b) ? 0 : b);
+  }, 0);
+  const totalAwarded = contracts.reduce((sum, c) => {
+    const a = Number(c.amount);
+    return sum + (isNaN(a) ? 0 : a);
+  }, 0);
   const avgBidsPerTender = tenders.length > 0 ? (bids.length / tenders.length).toFixed(1) : 0;
-  const completionRate = contracts.length > 0 
+  const completionRate = contracts.length > 0
     ? ((contracts.filter(c => c.status === 'completed').length / contracts.length) * 100).toFixed(1)
     : 0;
 
@@ -35,7 +41,8 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
     const cat = tender.category || 'Other';
     if (!acc[cat]) acc[cat] = { count: 0, budget: 0 };
     acc[cat].count++;
-    acc[cat].budget += Number(tender.budget || 0);
+    const b = Number(tender.budget);
+    acc[cat].budget += isNaN(b) ? 0 : b;
     return acc;
   }, {});
 
@@ -105,28 +112,108 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
       </div>
 
       {/* Category Breakdown */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-        <h3 className="text-gray-900 mb-4">{t('audit.budgetDistribution')}</h3>
-        <div className="space-y-3">
-          {Object.entries(categoryData).map(([category, data]: [string, any]) => {
-            const percentage = totalBudget > 0 ? ((data.budget / totalBudget) * 100).toFixed(1) : 0;
-            return (
-              <div key={category}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-700">{category}</span>
-                  <span className="text-gray-900">{data.budget.toLocaleString()} {t('audit.afn')} ({percentage}%)</span>
+      {(() => {
+        const categoryColors: Record<string, { bar: string; bg: string; text: string; icon: string }> = {
+          'Infrastructure':    { bar: '#3b82f6', bg: '#eef5fd', text: '#1c5cab', icon: '🏗️' },
+          'Healthcare':        { bar: '#22c55e', bg: '#eaf8ea', text: '#0a6b0a', icon: '🏥' },
+          'Education':         { bar: '#8b5cf6', bg: '#f3eefe', text: '#7c3aed', icon: '🎓' },
+          'IT & Technology':   { bar: '#06b6d4', bg: '#ecfeff', text: '#0e7490', icon: '💻' },
+          'Defense & Security':{ bar: '#ef4444', bg: '#fef2f2', text: '#b91c1c', icon: '🛡️' },
+          'Agriculture':       { bar: '#f59e0b', bg: '#fef9ee', text: '#92400e', icon: '🌾' },
+          'Transportation':    { bar: '#f97316', bg: '#fff7ed', text: '#c2410c', icon: '🚛' },
+        };
+        const defaultCatColor = { bar: '#6b7280', bg: '#f3f4f6', text: '#374151', icon: '📋' };
+
+        const entries = Object.entries(categoryData).sort((a: any, b: any) => b[1].budget - a[1].budget);
+        const maxBudget = entries.length > 0 ? Math.max(...entries.map(([, d]: any) => d.budget)) : 1;
+
+        return (
+          <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid #e8e7e4' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(30,58,95,0.25)' }}>
+                    <PieChart style={{ width: 22, height: 22, color: '#fff' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('audit.budgetDistribution')}</h3>
+                    <p style={{ margin: '2px 0 0', color: '#6e6c66', fontSize: 13 }}>{t('audit.totalBudget')}: {totalBudget.toLocaleString()} {t('audit.afn')}</p>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
-                    style={{ width: `${percentage}%` }}
-                  ></div>
-                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#6e6c66' }}>{entries.length} {entries.length === 1 ? 'category' : 'categories'}</span>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </div>
+
+            <div style={{ padding: '16px 28px 24px' }}>
+              {entries.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#9e9d98', padding: '32px 0', fontSize: 14 }}>No budget data available</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {entries.map(([category, data]: [string, any]) => {
+                    const pct = totalBudget > 0 ? ((data.budget / totalBudget) * 100) : 0;
+                    const barWidth = maxBudget > 0 ? ((data.budget / maxBudget) * 100) : 0;
+                    const colors = categoryColors[category] || defaultCatColor;
+
+                    return (
+                      <div
+                        key={category}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px',
+                          background: '#fff', borderRadius: 10, border: '1px solid #e8e7e4',
+                          transition: 'box-shadow 0.15s, border-color 0.15s', cursor: 'default',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'; (e.currentTarget as HTMLElement).style.borderColor = colors.bar + '40'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; (e.currentTarget as HTMLElement).style.borderColor = '#e8e7e4'; }}
+                      >
+                        {/* Category icon */}
+                        <div style={{
+                          width: 42, height: 42, borderRadius: 10, background: colors.bg,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 20, flexShrink: 0,
+                        }}>
+                          {colors.icon}
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontWeight: 700, fontSize: 14, color: '#0b0b0b' }}>{category}</span>
+                              <span style={{
+                                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                                color: colors.text, background: colors.bg, border: `1px solid ${colors.bar}30`,
+                              }}>
+                                {data.count} {data.count === 1 ? 'tender' : 'tenders'}
+                              </span>
+                            </div>
+                            <span style={{ fontWeight: 700, fontSize: 14, color: '#0b0b0b', fontVariantNumeric: 'tabular-nums' }}>
+                              {data.budget.toLocaleString()} {t('audit.afn')}
+                            </span>
+                          </div>
+
+                          {/* Progress bar */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ flex: 1, height: 8, background: '#f0efec', borderRadius: 999, overflow: 'hidden' }}>
+                              <div style={{
+                                width: `${barWidth}%`, height: '100%', borderRadius: 999,
+                                background: `linear-gradient(90deg, ${colors.bar}, ${colors.bar}cc)`,
+                                transition: 'width 0.6s ease',
+                              }} />
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: colors.text, minWidth: 42, textAlign: 'right' }}>
+                              {pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Search and Filters */}
       <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
