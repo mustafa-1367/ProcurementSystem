@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Flag, Coins } from 'lucide-react';
+import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Coins } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 
 interface PublicAuditDashboardProps {
@@ -15,16 +15,47 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
   const [filterCategory, setFilterCategory] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState('all');
-  const [flaggedTenders, setFlaggedTenders] = useState<Set<string>>(new Set());
   const { t } = useTranslation();
+  const parseBudget = (v: any) => Number(String(v).replace(/,/g, ''));
 
-  const handleFlag = (tenderId: string) => {
-    if (flaggedTenders.has(tenderId) || userRole !== 'citizen') return;
-    setFlaggedTenders(new Set([...flaggedTenders, tenderId]));
+  const handleDownloadReport = () => {
+    const rows: string[][] = [];
+    // Header
+    rows.push(['Tender Title', 'Department', 'Category', 'Budget (AFN)', 'Status', 'Deadline', 'Bids', 'Awarded To', 'Contract Amount (AFN)', 'Progress (%)', 'Blockchain Verified']);
+
+    tenders.forEach((tender) => {
+      const tenderBids = bids.filter((b) => b.tenderId === tender.id);
+      const tenderContract = contracts.find((c) => c.tenderId === tender.id);
+      const verified = blockchainRecords.some((r) => r.tenderId === tender.id);
+      const budgetNum = parseBudget(tender.budget);
+
+      rows.push([
+        tender.title || '',
+        tender.department || '',
+        tender.category || '',
+        isNaN(budgetNum) ? '' : String(budgetNum),
+        tender.status || '',
+        tender.deadline ? new Date(tender.deadline).toLocaleDateString() : '',
+        String(tenderBids.length),
+        tenderContract?.vendorName || '',
+        tenderContract ? String(Number(tenderContract.amount)) : '',
+        tenderContract ? String(tenderContract.progress || 0) : '',
+        verified ? 'Yes' : 'No',
+      ]);
+    });
+
+    const csvContent = rows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `procurement-audit-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const totalBudget = tenders.reduce((sum, tender) => {
-    const b = Number(tender.budget);
+    const b = parseBudget(tender.budget);
     return sum + (isNaN(b) ? 0 : b);
   }, 0);
   const totalAwarded = contracts.reduce((sum, c) => {
@@ -41,7 +72,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
     const cat = tender.category || 'Other';
     if (!acc[cat]) acc[cat] = { count: 0, budget: 0 };
     acc[cat].count++;
-    const b = Number(tender.budget);
+    const b = parseBudget(tender.budget);
     acc[cat].budget += isNaN(b) ? 0 : b;
     return acc;
   }, {});
@@ -66,9 +97,12 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           <h2 className="text-gray-900">{t('audit.title')}</h2>
           <p className="text-gray-600 mt-1">{t('audit.subtitle')}</p>
         </div>
-        <button className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+        <button
+          onClick={handleDownloadReport}
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+        >
           <Download className="w-5 h-5" />
-          {t('audit.exportReport')}
+          {t('audit.downloadReport')}
         </button>
       </div>
 
@@ -215,152 +249,221 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
         );
       })()}
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
-        <div className="flex gap-4">
-          <div className="flex-1 flex items-center gap-3 border border-gray-300 rounded-lg px-4 py-2">
-            <Search className="w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('audit.searchPlaceholder')}
-              className="flex-1 outline-none"
-            />
-          </div>
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">{t('audit.allCategories')}</option>
-            {Object.keys(categoryData).map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+      {/* All Procurement Records */}
+      {(() => {
+        const statusStyles: Record<string, { color: string; bg: string; border: string; label: string }> = {
+          draft:     { color: '#52514e', bg: '#f0efec', border: '#e1e0d9', label: t('dashboard.statusDraft') },
+          published: { color: '#1c5cab', bg: '#eef5fd', border: '#bcd6f5', label: t('dashboard.statusPublished') },
+          standstill:{ color: '#8a5a12', bg: '#fdf3df', border: '#f0dcae', label: t('dashboard.statusStandstill') },
+          awarded:   { color: '#0a6b0a', bg: '#eaf8ea', border: '#c7ecc7', label: t('dashboard.statusAwarded') },
+        };
 
-      {/* Tender List with Full Transparency */}
-      <div className="space-y-4">
-        <h3 className="text-gray-900">{t('audit.allRecords')}</h3>
-        {displayTenders.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
-            <Eye className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">{t('audit.noRecords')}</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {displayTenders.map((tender) => {
-              const tenderBids = bids.filter((b) => b.tenderId === tender.id);
-              const tenderContract = contracts.find((c) => c.tenderId === tender.id);
-              const blockchainVerified = blockchainRecords.some((r) => r.tenderId === tender.id);
+        return (
+          <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 14, overflow: 'hidden' }}>
+            {/* Header with integrated search */}
+            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid #e8e7e4' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(30,58,95,0.25)' }}>
+                    <FileText style={{ width: 22, height: 22, color: '#fff' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('audit.allRecords')}</h3>
+                    <p style={{ margin: '2px 0 0', color: '#6e6c66', fontSize: 13 }}>{t('audit.subtitle')}</p>
+                  </div>
+                </div>
+                <span style={{ background: 'linear-gradient(135deg, #1e3a5f, #2d5a8e)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
+                  {displayTenders.length} {displayTenders.length === 1 ? 'record' : 'records'}
+                </span>
+              </div>
 
-              return (
-                <div key={tender.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="text-gray-900">{tender.title}</h4>
-                        <span className={`px-3 py-1 rounded-full ${
-                          tender.status === 'published' ? 'bg-green-100 text-green-900' :
-                          tender.status === 'awarded' ? 'bg-blue-100 text-blue-900' :
-                          'bg-amber-100 text-amber-900'
-                        }`}>
-                          {tender.status}
-                        </span>
-                        {blockchainVerified && (
-                          <span className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-800 rounded-full">
-                            <Eye className="w-4 h-4" />
-                            {t('audit.blockchainVerified')}
+              {/* Search & Filter */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e1e0d9', borderRadius: 10, padding: '8px 14px', background: '#fff' }}>
+                  <Search style={{ width: 16, height: 16, color: '#9e9d98' }} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={t('audit.searchPlaceholder')}
+                    style={{ flex: 1, outline: 'none', border: 'none', fontSize: 13, color: '#0b0b0b', background: 'transparent' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e1e0d9', borderRadius: 10, padding: '8px 14px', background: '#fff' }}>
+                  <Filter style={{ width: 16, height: 16, color: '#9e9d98' }} />
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    style={{ outline: 'none', border: 'none', fontSize: 13, color: '#0b0b0b', background: 'transparent', cursor: 'pointer' }}
+                  >
+                    <option value="all">{t('audit.allCategories')}</option>
+                    {Object.keys(categoryData).map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Records */}
+            {displayTenders.length === 0 ? (
+              <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+                <Eye style={{ width: 48, height: 48, color: '#d1d0cc', margin: '0 auto 12px' }} />
+                <p style={{ color: '#9e9d98', fontSize: 14 }}>{t('audit.noRecords')}</p>
+              </div>
+            ) : (
+              <div style={{ padding: '16px 28px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {displayTenders.map((tender) => {
+                  const tenderBids = bids.filter((b) => b.tenderId === tender.id);
+                  const tenderContract = contracts.find((c) => c.tenderId === tender.id);
+                  const blockchainVerified = blockchainRecords.some((r) => r.tenderId === tender.id);
+                  const s = statusStyles[tender.status] || statusStyles.draft;
+                  const budgetNum = parseBudget(tender.budget);
+                  const budgetDisplay = isNaN(budgetNum) ? '—' : budgetNum.toLocaleString();
+
+                  return (
+                    <div
+                      key={tender.id}
+                      style={{
+                        background: '#fff', borderRadius: 12, border: '1px solid #e8e7e4',
+                        overflow: 'hidden', transition: 'box-shadow 0.15s, border-color 0.15s',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.07)'; (e.currentTarget as HTMLElement).style.borderColor = '#d0cfca'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; (e.currentTarget as HTMLElement).style.borderColor = '#e8e7e4'; }}
+                    >
+                      {/* Title bar */}
+                      <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0efec' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <h4 style={{ margin: 0, fontWeight: 700, fontSize: 16, color: '#0b0b0b', letterSpacing: '-0.01em' }}>{tender.title}</h4>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: 11.5, fontWeight: 700, padding: '3px 10px',
+                            borderRadius: 999, border: `1px solid ${s.border}`,
+                            color: s.color, background: s.bg,
+                          }}>
+                            {s.label}
                           </span>
-                        )}
-                        {userRole === 'citizen' && !flaggedTenders.has(tender.id) && (
-                          <button
-                            onClick={() => handleFlag(tender.id)}
-                            className="flex items-center gap-1 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-300 rounded-full text-xs font-semibold hover:bg-amber-100 transition-colors"
-                          >
-                            <Flag className="w-3.5 h-3.5" />
-                            {t('rewards.flagBtn')}
-                          </button>
-                        )}
-                        {userRole === 'citizen' && flaggedTenders.has(tender.id) && (
-                          <span className="flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">
-                            <Flag className="w-3.5 h-3.5" />
-                            {t('rewards.flagged')}
-                          </span>
+                          {blockchainVerified && (
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              fontSize: 11, fontWeight: 700, padding: '3px 9px',
+                              borderRadius: 999, color: '#6d28d9', background: '#f3eefe', border: '1px solid #ddd6fe',
+                            }}>
+                              <Shield style={{ width: 12, height: 12 }} />
+                              {t('audit.blockchainVerified')}
+                            </span>
+                          )}
+                        </div>
+                        {tender.description && (
+                          <p style={{ margin: '6px 0 0', fontSize: 13, color: '#6e6c66', lineHeight: 1.5 }}>{tender.description}</p>
                         )}
                       </div>
-                      <p className="text-gray-600 mb-3">{tender.description}</p>
 
-                      <div className="grid grid-cols-4 gap-4 text-gray-700 mb-4">
-                        <div>
-                          <p className="text-gray-500">{t('preTender.department')}</p>
-                          <p>{tender.department}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">{t('preTender.budget')}</p>
-                          <p>{Number(tender.budget).toLocaleString()} {t('audit.afn')}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">{t('preTender.category')}</p>
-                          <p>{tender.category}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">{t('preTender.submissionDeadline')}</p>
-                          <p>{new Date(tender.deadline).toLocaleDateString()}</p>
-                        </div>
+                      {/* Details grid */}
+                      <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                        {[
+                          { label: t('preTender.department'), value: tender.department },
+                          { label: t('preTender.budget'), value: `${budgetDisplay} ${t('audit.afn')}` },
+                          { label: t('preTender.category'), value: tender.category },
+                          { label: t('preTender.submissionDeadline'), value: new Date(tender.deadline).toLocaleDateString() },
+                        ].map((item, i) => (
+                          <div key={i}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#9e9d98', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{item.label}</div>
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0b0b0b' }}>{item.value}</div>
+                          </div>
+                        ))}
                       </div>
 
                       {/* Bidding Information */}
                       {tenderBids.length > 0 && (
-                        <div className="bg-gray-50 p-4 rounded-lg mb-3">
-                          <p className="text-gray-700 mb-2">{tenderBids.length} {t('audit.bidsReceived')}</p>
+                        <div style={{ margin: '0 20px 14px', borderRadius: 10, overflow: 'hidden', border: '1px solid #e8e7e4' }}>
+                          <div style={{ padding: '10px 14px', background: '#f8f8f6', borderBottom: '1px solid #e8e7e4', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0b0b0b' }}>
+                              {tenderBids.length} {t('audit.bidsReceived')}
+                            </span>
+                            {new Date(tender.deadline) > new Date() && (
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                fontSize: 11, fontWeight: 700, padding: '2px 8px',
+                                borderRadius: 999, color: '#8a5a12', background: '#fdf3df', border: '1px solid #f0dcae',
+                              }}>
+                                <Shield style={{ width: 11, height: 11 }} />
+                                {t('audit.bidsSealed')}
+                              </span>
+                            )}
+                          </div>
                           {new Date(tender.deadline) <= new Date() ? (
-                            <div className="space-y-2">
+                            <div>
                               {tenderBids.map((bid, idx) => (
-                                <div key={bid.id} className="flex items-center justify-between text-gray-600">
-                                  <span>{t('audit.bid')}#{idx + 1}: {bid.vendorName}</span>
-                                  <span>{Number(bid.amount).toLocaleString()} {t('audit.afn')}</span>
+                                <div key={bid.id} style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                  padding: '9px 14px', fontSize: 13, color: '#52514e',
+                                  borderBottom: idx < tenderBids.length - 1 ? '1px solid #f0efec' : 'none',
+                                  background: tenderContract && tenderContract.vendorName === bid.vendorName ? '#eaf8ea' : '#fff',
+                                }}>
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ width: 20, height: 20, borderRadius: 999, background: '#f0efec', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#6e6c66' }}>{idx + 1}</span>
+                                    <span style={{ fontWeight: 600, color: '#0b0b0b' }}>{bid.vendorName}</span>
+                                    {tenderContract && tenderContract.vendorName === bid.vendorName && (
+                                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: '#0a6b0a', background: '#d1fae5', border: '1px solid #bbf7d0' }}>Winner</span>
+                                    )}
+                                  </span>
+                                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#0b0b0b' }}>
+                                    {Number(bid.amount).toLocaleString()} {t('audit.afn')}
+                                  </span>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-200">
-                              <span className="text-sm font-medium">{t('audit.bidsSealed')}</span>
+                            <div style={{ padding: '16px 14px', textAlign: 'center', color: '#8a5a12', fontSize: 13 }}>
+                              {t('audit.bidsSealed')}
                             </div>
                           )}
                         </div>
                       )}
 
-                      {/* Contract Award Information */}
+                      {/* Contract Award */}
                       {tenderContract && (
-                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                          <p className="text-green-800 mb-2">{t('audit.contractAwarded')}</p>
-                          <div className="grid grid-cols-3 gap-4 text-gray-700">
+                        <div style={{ margin: '0 20px 16px', borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', overflow: 'hidden' }}>
+                          <div style={{ padding: '10px 14px', background: '#dcfce7', borderBottom: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckCircle style={{ width: 14, height: 14, color: '#0a6b0a' }} />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0a6b0a' }}>{t('audit.contractAwarded')}</span>
+                          </div>
+                          <div style={{ padding: '14px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                             <div>
-                              <p className="text-gray-600">{t('audit.awardedTo')}</p>
-                              <p>{tenderContract.vendorName}</p>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{t('audit.awardedTo')}</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0b0b0b' }}>{tenderContract.vendorName}</div>
                             </div>
                             <div>
-                              <p className="text-gray-600">{t('audit.amount')}</p>
-                              <p>{Number(tenderContract.amount).toLocaleString()} {t('audit.afn')}</p>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{t('audit.amount')}</div>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0b0b0b' }}>{Number(tenderContract.amount).toLocaleString()} {t('audit.afn')}</div>
                             </div>
                             <div>
-                              <p className="text-gray-600">{t('audit.progress')}</p>
-                              <p>{tenderContract.progress}%</p>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>{t('audit.progress')}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ flex: 1, height: 8, background: '#e8e7e4', borderRadius: 999, overflow: 'hidden' }}>
+                                  <div style={{
+                                    width: `${tenderContract.progress || 0}%`, height: '100%', borderRadius: 999,
+                                    background: (tenderContract.progress || 0) === 100 ? 'linear-gradient(90deg, #22c55e, #16a34a)' : 'linear-gradient(90deg, #3b82f6, #2563eb)',
+                                    transition: 'width 0.6s ease',
+                                  }} />
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: (tenderContract.progress || 0) === 100 ? '#0a6b0a' : '#1c5cab', minWidth: 32 }}>
+                                  {tenderContract.progress || 0}%
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
                       )}
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Chronological Audit Log */}
       {(() => {
@@ -407,8 +510,13 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
               return { actor: tender?.department || t('audit.systemActor'), detail: tender?.title || record.tenderId };
             case 'tender_published':
               return { actor: tender?.department || t('audit.systemActor'), detail: tender?.title || record.tenderId };
-            case 'bid_submitted':
-              return { actor: bid?.vendorName || t('audit.systemActor'), detail: `${tender?.title || ''} — ${Number(bid?.amount || 0).toLocaleString()} ${t('audit.afn')}` };
+            case 'bid_submitted': {
+              const deadlinePassed = tender && new Date(tender.deadline).getTime() <= Date.now();
+              if (deadlinePassed) {
+                return { actor: bid?.vendorName || t('audit.systemActor'), detail: `${tender?.title || ''} — ${Number(bid?.amount || 0).toLocaleString()} ${t('audit.afn')}` };
+              }
+              return { actor: t('audit.sealedBidActor'), detail: tender?.title || record.tenderId };
+            }
             case 'contract_awarded':
               return { actor: contract?.vendorName || t('audit.systemActor'), detail: tender?.title || record.tenderId };
             case 'payment_processed':
@@ -607,9 +715,9 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                     <span style={{
                                       display: 'inline-flex', alignItems: 'center', gap: 4,
                                       fontSize: 11, fontWeight: 700, padding: '3px 9px',
-                                      borderRadius: 999, color: '#8a5a12', background: '#fdf3df', border: '1px solid #f0dcae',
+                                      borderRadius: 999, color: '#52514e', background: '#f0efec', border: '1px solid #e1e0d9',
                                     }}>
-                                      <Clock style={{ width: 12, height: 12 }} />
+                                      <Activity style={{ width: 12, height: 12 }} />
                                       {t('audit.unverified')}
                                     </span>
                                   )}

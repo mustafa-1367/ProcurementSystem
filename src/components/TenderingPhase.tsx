@@ -12,6 +12,7 @@ interface TenderingPhaseProps {
   blockchainRecords: any[];
   reputationScores: any[];
   userRole: string;
+  registeredSuppliers: any[];
 }
 
 export function TenderingPhase({
@@ -23,10 +24,12 @@ export function TenderingPhase({
   blockchainRecords,
   reputationScores,
   userRole,
+  registeredSuppliers,
 }: TenderingPhaseProps) {
   const [selectedTender, setSelectedTender] = useState<any>(null);
   const [showBidForm, setShowBidForm] = useState(false);
   const [bidSuccess, setBidSuccess] = useState<{ bidId: string; tenderTitle: string; vendorName: string; amount: string; onChain: boolean } | null>(null);
+  const [kycError, setKycError] = useState(false);
   const [bidForm, setBidForm] = useState({
     vendorName: '',
     vendorEmail: '',
@@ -36,17 +39,29 @@ export function TenderingPhase({
     experience: '',
   });
   const { t } = useTranslation();
+  const parseBudget = (v: any) => Number(String(v).replace(/,/g, ''));
 
   const publishedTenders = tenders.filter((td) => td.status === 'published');
 
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Check if supplier is registered via e-KYC
+    const registeredSupplier = registeredSuppliers.find(
+      (s) => s.companyName?.toLowerCase().trim() === bidForm.vendorName?.toLowerCase().trim()
+    );
+    if (!registeredSupplier) {
+      setKycError(true);
+      return;
+    }
+    setKycError(false);
+
     const newBid = {
       id: `BID-${Date.now()}`,
       tenderId: selectedTender.id,
       tenderTitle: selectedTender.title,
       ...bidForm,
+      vendorEmail: registeredSupplier.email,
       status: 'submitted',
       submittedAt: new Date().toISOString(),
       evaluated: false,
@@ -146,7 +161,7 @@ export function TenderingPhase({
                       </div>
                       <div className="flex items-center gap-2 text-gray-700">
                         <Banknote className="w-4 h-4" />
-                        <span>{Number(tender.budget).toLocaleString()} {t('tendering.afn')}</span>
+                        <span>{parseBudget(tender.budget).toLocaleString()} {t('tendering.afn')}</span>
                       </div>
                       <div className="flex items-center gap-2 text-gray-700">
                         <Calendar className="w-4 h-4" />
@@ -238,7 +253,7 @@ export function TenderingPhase({
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <TrendingDown className="w-4 h-4" />
-                                    {((Number(bid.amount) / Number(tender.budget)) * 100).toFixed(1)}{t('tendering.ofBudget')}
+                                    {((Number(bid.amount) / parseBudget(tender.budget)) * 100).toFixed(1)}{t('tendering.ofBudget')}
                                   </div>
                                 </div>
                               </div>
@@ -265,108 +280,195 @@ export function TenderingPhase({
       </div>
 
       {showBidForm && selectedTender && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-gray-900">{t('tendering.submitBid')}</h3>
-                  <p className="text-gray-600 mt-1">{selectedTender.title}</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
+          <div style={{ background: '#fcfcfb', borderRadius: 14, maxWidth: 640, width: '100%', maxHeight: '90vh', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column' }}>
+
+            {/* Header with tender context */}
+            <div style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)', padding: '20px 24px', position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => { setShowBidForm(false); setSelectedTender(null); setKycError(false); }}
+                style={{ position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 18 }}
+              >
+                &times;
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Send style={{ width: 20, height: 20, color: '#fff' }} />
                 </div>
-                <Shield className="w-6 h-6 text-green-600" />
+                <div>
+                  <h3 style={{ margin: 0, fontWeight: 700, fontSize: 18, color: '#fff' }}>{t('tendering.submitBid')}</h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>{selectedTender.title}</p>
+                </div>
+              </div>
+              {/* Tender context info */}
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {[
+                  { label: t('preTender.budget'), value: `${isNaN(parseBudget(selectedTender.budget)) ? '—' : parseBudget(selectedTender.budget).toLocaleString()} AFN` },
+                  { label: t('preTender.category'), value: selectedTender.category },
+                  { label: t('preTender.submissionDeadline'), value: new Date(selectedTender.deadline).toLocaleDateString() },
+                ].map((item, i) => (
+                  <div key={i} style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+                    <span>{item.label}: </span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>{item.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <form onSubmit={handleSubmitBid} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-2">{t('tendering.vendorName')}</label>
-                  <input
-                    type="text"
-                    required
-                    value={bidForm.vendorName}
-                    onChange={(e) => setBidForm({ ...bidForm, vendorName: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={t('tendering.vendorPlaceholder')}
-                  />
-                </div>
+            {/* Sealed bid notice */}
+            <div style={{ padding: '10px 24px', background: '#eef5fd', borderBottom: '1px solid #bcd6f5', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Lock style={{ width: 14, height: 14, color: '#1c5cab' }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#1c5cab' }}>{t('tendering.sealedNotice')}</span>
+            </div>
 
-                <div>
-                  <label className="block text-gray-700 mb-2">{t('tendering.contactEmail')}</label>
-                  <input
-                    type="email"
-                    required
-                    value={bidForm.vendorEmail}
-                    onChange={(e) => setBidForm({ ...bidForm, vendorEmail: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={t('tendering.emailPlaceholder')}
-                  />
+            {/* Form */}
+            <form onSubmit={handleSubmitBid} style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
+              {kycError && (
+                <div style={{
+                  background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px',
+                  display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16,
+                }}>
+                  <Shield style={{ width: 18, height: 18, color: '#b91c1c', flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#b91c1c', marginBottom: 2 }}>{t('tendering.kycRequired')}</div>
+                    <div style={{ fontSize: 12.5, color: '#991b1b', lineHeight: 1.5 }}>{t('tendering.kycRequiredDesc')}</div>
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-gray-700 mb-2">{t('tendering.bidAmount')}</label>
-                  <input
-                    type="number"
-                    required
-                    value={bidForm.amount}
-                    onChange={(e) => setBidForm({ ...bidForm, amount: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={t('tendering.amountPlaceholder')}
-                  />
+              {/* Company & Financial */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>{t('tendering.bidderInfo')}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>
+                      <Building style={{ width: 14, height: 14, color: '#6e6c66' }} />
+                      {t('tendering.vendorName')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={bidForm.vendorName}
+                      onChange={(e) => { setBidForm({ ...bidForm, vendorName: e.target.value }); setKycError(false); }}
+                      placeholder={t('tendering.vendorPlaceholder')}
+                      style={{
+                        width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                        border: kycError ? '1.5px solid #f87171' : '1px solid #e1e0d9',
+                        outline: 'none', background: '#fff', color: '#0b0b0b',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>
+                      <Banknote style={{ width: 14, height: 14, color: '#6e6c66' }} />
+                      {t('tendering.bidAmount')} (AFN)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      value={bidForm.amount}
+                      onChange={(e) => setBidForm({ ...bidForm, amount: e.target.value })}
+                      placeholder={t('tendering.amountPlaceholder')}
+                      style={{
+                        width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                        border: '1px solid #e1e0d9', outline: 'none', background: '#fff', color: '#0b0b0b',
+                      }}
+                    />
+                    {!isNaN(parseBudget(selectedTender.budget)) && (
+                      <div style={{ fontSize: 11.5, color: '#6e6c66', marginTop: 4 }}>
+                        {t('tendering.estimatedBudget')}: <strong>{parseBudget(selectedTender.budget).toLocaleString()} AFN</strong>
+                      </div>
+                    )}
+                    {Number(bidForm.amount) > parseBudget(selectedTender.budget) && !isNaN(parseBudget(selectedTender.budget)) && (
+                      <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4, fontWeight: 600 }}>
+                        {t('tendering.exceedsBudget')}
+                      </div>
+                    )}
+                  </div>
                 </div>
-
-                <div>
-                  <label className="block text-gray-700 mb-2">{t('tendering.completionTimeline')}</label>
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>
+                    <Calendar style={{ width: 14, height: 14, color: '#6e6c66' }} />
+                    {t('tendering.completionTimeline')}
+                  </label>
                   <input
                     type="text"
                     required
                     value={bidForm.timeline}
                     onChange={(e) => setBidForm({ ...bidForm, timeline: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder={t('tendering.timelinePlaceholder')}
+                    style={{
+                      width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                      border: '1px solid #e1e0d9', outline: 'none', background: '#fff', color: '#0b0b0b',
+                    }}
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-gray-700 mb-2">{t('tendering.technicalProposal')}</label>
-                <textarea
-                  required
-                  value={bidForm.technicalProposal}
-                  onChange={(e) => setBidForm({ ...bidForm, technicalProposal: e.target.value })}
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={t('tendering.proposalPlaceholder')}
-                />
+              {/* Technical Proposal */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6e6c66', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 12 }}>{t('tendering.technicalSection')}</div>
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>
+                    <FileText style={{ width: 14, height: 14, color: '#6e6c66' }} />
+                    {t('tendering.technicalProposal')}
+                  </label>
+                  <textarea
+                    required
+                    value={bidForm.technicalProposal}
+                    onChange={(e) => setBidForm({ ...bidForm, technicalProposal: e.target.value })}
+                    rows={4}
+                    placeholder={t('tendering.proposalPlaceholder')}
+                    style={{
+                      width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                      border: '1px solid #e1e0d9', outline: 'none', background: '#fff', color: '#0b0b0b',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>
+                    <TrendingDown style={{ width: 14, height: 14, color: '#6e6c66' }} />
+                    {t('tendering.relevantExperience')}
+                  </label>
+                  <textarea
+                    required
+                    value={bidForm.experience}
+                    onChange={(e) => setBidForm({ ...bidForm, experience: e.target.value })}
+                    rows={3}
+                    placeholder={t('tendering.experiencePlaceholder')}
+                    style={{
+                      width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                      border: '1px solid #e1e0d9', outline: 'none', background: '#fff', color: '#0b0b0b',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-gray-700 mb-2">{t('tendering.relevantExperience')}</label>
-                <textarea
-                  required
-                  value={bidForm.experience}
-                  onChange={(e) => setBidForm({ ...bidForm, experience: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={t('tendering.experiencePlaceholder')}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 10, paddingTop: 8, borderTop: '1px solid #e8e7e4' }}>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    background: 'linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%)', color: '#fff',
+                    padding: '11px 20px', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer', boxShadow: '0 2px 8px rgba(30,58,95,0.25)',
+                  }}
                 >
-                  <Shield className="w-5 h-5" />
+                  <Lock style={{ width: 16, height: 16 }} />
                   {t('tendering.submitRecord')}
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowBidForm(false);
-                    setSelectedTender(null);
+                  onClick={() => { setShowBidForm(false); setSelectedTender(null); setKycError(false); }}
+                  style={{
+                    padding: '11px 20px', borderRadius: 10, border: '1px solid #e1e0d9',
+                    background: '#fff', color: '#52514e', fontSize: 14, fontWeight: 600,
+                    cursor: 'pointer',
                   }}
-                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   {t('tendering.cancel')}
                 </button>
@@ -378,7 +480,7 @@ export function TenderingPhase({
 
       {/* Bid Submission Success Modal */}
       {bidSuccess && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
           <div style={{ background: '#fff', borderRadius: 12, maxWidth: 480, width: '100%', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.15)' }}>
             <div style={{ background: '#ecfdf5', padding: '32px 24px', textAlign: 'center', borderBottom: '1px solid #a7f3d0' }}>
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>

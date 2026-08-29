@@ -405,6 +405,21 @@ function AppContent() {
         </div>
       </div>
 
+      {/* Simulation Mode Banner */}
+      {!connected && (
+        <div style={{
+          background: 'linear-gradient(90deg, #fef3cd 0%, #fef9e7 100%)',
+          borderBottom: '1px solid #f0dcae',
+          padding: '10px 22px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        }}>
+          <Activity style={{ width: 16, height: 16, color: '#92400e' }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#78350f' }}>
+            {t('app.simulationBanner')}
+          </span>
+        </div>
+      )}
+
       {/* Main Content */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 py-8">
         {activePhase === 'dashboard' && (
@@ -441,6 +456,7 @@ function AppContent() {
             blockchainRecords={blockchainRecords}
             reputationScores={reputationScores}
             userRole={userRole}
+            registeredSuppliers={registeredSuppliers}
           />
         )}
         {activePhase === 'post' && (
