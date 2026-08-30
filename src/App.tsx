@@ -355,7 +355,7 @@ function AppContent() {
       <header className="sticky top-0 z-[60]" style={{ background: 'linear-gradient(180deg, #0f2942 0%, #173d61 100%)', boxShadow: '0 2px 10px rgba(0,0,0,.18)' }}>
         <div className="topbar-inner max-w-7xl mx-auto flex items-center justify-between" style={{ padding: '10px 22px', height: 64 }}>
           {/* Left: Logo + Platform name */}
-          <div className="flex items-center" style={{ gap: 11 }}>
+          <div className="flex items-center" style={{ gap: 11, minWidth: 0, flexShrink: 1 }}>
             <div className="flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #c99a3c, #e0b658)' }} aria-hidden="true">
               <svg width="26" height="26" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Network mesh lines */}
@@ -396,13 +396,13 @@ function AppContent() {
               </svg>
             </div>
             <div>
-              <div className="text-white" style={{ fontWeight: 800, fontSize: 17, lineHeight: 1.1 }}>{t('app.title')}</div>
-              <div style={{ fontSize: 11, color: '#c7d3e0', letterSpacing: '0.03em' }}>{t('app.subtitle')}</div>
+              <div className="text-white" style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.1, whiteSpace: 'nowrap' }}>{t('app.title')}</div>
+              <div style={{ fontSize: 11, color: '#c7d3e0', letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>{t('app.subtitle')}</div>
             </div>
           </div>
 
           {/* Right: Role switcher + utilities */}
-          <div className="header-controls flex items-center" style={{ gap: 10 }}>
+          <div className="header-controls flex items-center" style={{ gap: 6 }}>
             <nav aria-label={t('role.switchRole')} className="role-switch flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
               {ALL_ROLES.map((role) => {
                 // When wallet connected: lock to on-chain role (or citizen if no role registered)
@@ -422,9 +422,9 @@ function AppContent() {
                       border: 'none',
                       background: userRole === role ? '#c99a3c' : 'transparent',
                       color: userRole === role ? '#0f2942' : '#dbe4ee',
-                      padding: '8px 14px',
+                      padding: '6px 10px',
                       borderRadius: 999,
-                      fontSize: '12.5px',
+                      fontSize: '11.5px',
                       fontWeight: 600,
                       cursor: isDisabled ? 'not-allowed' : 'pointer',
                       whiteSpace: 'nowrap' as const,
@@ -432,7 +432,7 @@ function AppContent() {
                       opacity: isDisabled ? 0.35 : 1,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 4,
+                      gap: 3,
                     }}
                     className="focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
                     onMouseEnter={(e) => { if (userRole !== role && !isDisabled) (e.target as HTMLElement).style.background = 'rgba(255,255,255,.10)'; }}
@@ -456,7 +456,7 @@ function AppContent() {
                 aria-expanded={showLangMenu}
                 aria-haspopup="true"
                 className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-                style={{ color: '#c7d3e0', padding: '6px 8px', fontSize: '12.5px' }}
+                style={{ color: '#c7d3e0', padding: '5px 5px', fontSize: '12px' }}
               >
                 <Globe className="w-4 h-4" />
                 <span>{t(`lang.${language}`)}</span>
@@ -499,7 +499,7 @@ function AppContent() {
             <button
               onClick={() => setShowAccessibility(true)}
               className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-              style={{ color: '#c7d3e0', padding: '6px 8px', fontSize: '12.5px' }}
+              style={{ color: '#c7d3e0', padding: '5px 5px', fontSize: '12px' }}
               aria-label={t('a11y.title')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -512,7 +512,7 @@ function AppContent() {
             <button
               onClick={() => { setActivePhase('help'); setShowLangMenu(false); }}
               className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-              style={{ color: activePhase === 'help' ? '#ffffff' : '#c7d3e0', padding: '6px 8px', fontSize: '12.5px' }}
+              style={{ color: activePhase === 'help' ? '#ffffff' : '#c7d3e0', padding: '5px 5px', fontSize: '12px' }}
             >
               <HelpCircle className="w-4 h-4" />
               <span>{t('nav.help')}</span>

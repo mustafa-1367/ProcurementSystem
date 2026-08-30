@@ -39,22 +39,13 @@ export function Web3Status() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-800 border border-green-200 rounded-lg text-sm">
-        <Wifi className="w-3.5 h-3.5" />
-        <span className="font-medium">{networkName}</span>
-        <span className="text-green-600 font-mono text-xs">{shortAddress}</span>
-      </div>
-      <button
-        onClick={disconnect}
-        className="p-1.5 text-gray-500 hover:text-red-600 rounded transition-colors"
-        title="Disconnect wallet"
-      >
-        <WifiOff className="w-4 h-4" />
-      </button>
-      {error && (
-        <span className="text-red-600 text-xs">{error}</span>
-      )}
-    </div>
+    <button
+      onClick={disconnect}
+      className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
+      title={networkName}
+    >
+      <Wifi className="w-4 h-4" />
+      {shortAddress}
+    </button>
   );
 }
