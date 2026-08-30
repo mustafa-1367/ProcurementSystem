@@ -113,6 +113,11 @@ export function DAOGovernance({
       type: disputeForm.type,
     });
 
+    // Store the on-chain dispute ID if available
+    if (contract.data?.onChainDisputeId) {
+      newDispute.onChainDisputeId = contract.data.onChainDisputeId;
+    }
+
     const blockchainRecord = {
       id: block.hash,
       type: 'dispute_created',
@@ -142,10 +147,32 @@ export function DAOGovernance({
     // Prevent double voting: key by wallet address + dispute ID
     const voteKey = account ? `${account}-${disputeId}` : disputeId;
     if (userVotes[voteKey]) return; // Already voted
-    setUserVotes({ ...userVotes, [voteKey]: vote });
 
     const dispute = disputes.find((d) => d.id === disputeId);
     if (!dispute) return;
+
+    // Attempt on-chain vote via smart contract
+    const { block: voteBlock, contract: voteContract, onChain: voteOnChain } = await addProcurementRecordAsync('dao_resolution', {
+      disputeId,
+      approve: vote === 'approve',
+    });
+
+    // Record the vote in blockchain records
+    const voteRecord = {
+      id: voteBlock.hash,
+      type: 'dao_vote',
+      disputeId,
+      contractId: voteContract.id,
+      transactionHash: voteContract.transactionHash,
+      vote,
+      timestamp: new Date().toISOString(),
+      verified: voteOnChain,
+      simulated: !voteOnChain,
+      onChain: voteOnChain,
+    };
+    setBlockchainRecords([...blockchainRecords, voteRecord]);
+
+    setUserVotes({ ...userVotes, [voteKey]: vote });
 
     const newVotes = {
       approve: dispute.votes.approve + (vote === 'approve' ? 1 : 0),
@@ -156,7 +183,7 @@ export function DAOGovernance({
     let status = dispute.status;
     let resolution = dispute.resolution;
 
-    // Auto-resolve only if quorum is met
+    // Auto-resolve only if quorum is met (on-chain contract auto-resolves at 10 votes)
     if (newVotes.totalVoters >= QUORUM_THRESHOLD) {
       const approvalRate = (newVotes.approve / newVotes.totalVoters) * 100;
       status = 'resolved';
@@ -165,29 +192,6 @@ export function DAOGovernance({
         approvalRate,
         resolvedAt: new Date().toISOString(),
       };
-
-      // Add resolution to blockchain
-      const { block: resBlock, contract: resContract, onChain: resOnChain } = await addProcurementRecordAsync('dao_resolution', {
-        disputeId,
-        decision: resolution.decision,
-        approve: resolution.decision === 'approved',
-        approvalRate,
-      });
-
-      const blockchainRecord = {
-        id: resBlock.hash,
-        type: 'dao_resolution',
-        disputeId,
-        contractId: resContract.id,
-        transactionHash: resContract.transactionHash,
-        decision: resolution.decision,
-        timestamp: new Date().toISOString(),
-        verified: resOnChain,
-        simulated: !resOnChain,
-        onChain: resOnChain,
-      };
-
-      setBlockchainRecords([...blockchainRecords, blockchainRecord]);
     }
 
     const updatedDisputes = disputes.map((d) =>
@@ -301,14 +305,24 @@ export function DAOGovernance({
         </button>
       </div>
 
-      {/* Simulation Disclaimer */}
-      <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <Shield className="w-5 h-5 text-amber-600 flex-shrink-0" />
-        <div>
-          <p className="text-amber-900 font-medium text-sm">{t('dao.simulationNotice')}</p>
-          <p className="text-amber-700 text-xs mt-0.5">{t('dao.simulationDesc')}</p>
+      {/* DAO Mode Indicator */}
+      {connected && isCorrectNetwork ? (
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg p-4">
+          <Shield className="w-5 h-5 text-green-600 flex-shrink-0" />
+          <div>
+            <p className="text-green-900 font-medium text-sm">{t('dao.onChainNotice')}</p>
+            <p className="text-green-700 text-xs mt-0.5">{t('dao.onChainDesc')}</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <Shield className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div>
+            <p className="text-amber-900 font-medium text-sm">{t('dao.simulationNotice')}</p>
+            <p className="text-amber-700 text-xs mt-0.5">{t('dao.simulationDesc')}</p>
+          </div>
+        </div>
+      )}
 
       {/* Panel Tabs */}
       <div className="flex gap-2">

@@ -155,23 +155,48 @@ async function onChainPayment(
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
 }
 
+// Cache mapping: local dispute ID (e.g. "DSP-123") → on-chain bytes32 dispute ID
+const onChainDisputeIdCache: Record<string, string> = {};
+
 async function onChainDispute(
   procContract: Contract,
   data: Record<string, unknown>
-): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainDisputeId?: string }> {
   const title = String(data.title || 'Dispute');
   const tx = await procContract.createDispute(title);
   const receipt = await tx.wait();
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+
+  // Extract the on-chain disputeId from the DisputeCreated event
+  let onChainDisputeId: string | undefined;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = procContract.interface.parseLog({ topics: [...log.topics], data: log.data });
+      if (parsed && parsed.name === 'DisputeCreated') {
+        onChainDisputeId = parsed.args[0]; // first indexed arg is disputeId
+        // Cache it with the local ID if provided
+        if (data.disputeId) {
+          onChainDisputeIdCache[String(data.disputeId)] = onChainDisputeId;
+        }
+        break;
+      }
+    } catch { /* skip non-matching logs */ }
+  }
+
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainDisputeId };
 }
 
 async function onChainVote(
   procContract: Contract,
   data: Record<string, unknown>
 ): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
-  const disputeId = keccak256(data.disputeId as string);
+  // Look up the real on-chain dispute ID from cache
+  const localId = String(data.disputeId || '');
+  const onChainId = onChainDisputeIdCache[localId];
+  if (!onChainId) {
+    throw new Error(`No on-chain dispute ID found for ${localId}. The dispute may not have been created on-chain.`);
+  }
   const approve = Boolean(data.approve);
-  const tx = await procContract.castVote(disputeId, approve);
+  const tx = await procContract.castVote(onChainId, approve);
   const receipt = await tx.wait();
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
 }
@@ -212,7 +237,7 @@ export async function addProcurementRecordAsync(
   // Try on-chain if wallet is connected and on correct network
   if (web3.connected && web3.isCorrectNetwork && web3.procurementContract) {
     try {
-      let receipt: { txHash: string; blockNumber: number; blockHash: string };
+      let receipt: { txHash: string; blockNumber: number; blockHash: string; onChainDisputeId?: string };
 
       switch (type) {
         case 'tender':
@@ -251,11 +276,16 @@ export async function addProcurementRecordAsync(
           throw new Error(`Unknown type: ${type}`);
       }
 
+      // Include on-chain dispute ID in the data if available
+      const resultData = receipt.onChainDisputeId
+        ? { ...data, onChainDisputeId: receipt.onChainDisputeId }
+        : data;
+
       return {
         block: {
           index: receipt.blockNumber,
           timestamp: Date.now(),
-          data,
+          data: resultData,
           previousHash: '',
           hash: receipt.blockHash,
           nonce: 0,
@@ -264,7 +294,7 @@ export async function addProcurementRecordAsync(
           id: receipt.txHash,
           type,
           status: 'executed',
-          data,
+          data: resultData,
           timestamp: Date.now(),
           transactionHash: receipt.txHash,
         },
