@@ -405,9 +405,10 @@ function AppContent() {
           <div className="header-controls flex items-center" style={{ gap: 10 }}>
             <nav aria-label={t('role.switchRole')} className="role-switch flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
               {ALL_ROLES.map((role) => {
-                // When wallet connected & on-chain role exists: lock to that role
-                const isLockedToOnChain = connected && onChainRole !== null;
-                const isDisabled = isLockedToOnChain && role !== onChainRole;
+                // When wallet connected: lock to on-chain role (or citizen if no role registered)
+                const isLockedToOnChain = connected;
+                const allowedRole = onChainRole ?? 'citizen';
+                const isDisabled = isLockedToOnChain && role !== allowedRole;
                 return (
                   <button
                     key={role}
@@ -439,7 +440,7 @@ function AppContent() {
                   >
                     {isDisabled && <Lock style={{ width: 11, height: 11, opacity: 0.7 }} />}
                     {t(`role.${role}`)}
-                    {onChainRole === role && (
+                    {connected && allowedRole === role && (
                       <span style={{ marginLeft: 2, fontSize: '9px', verticalAlign: 'super', color: userRole === role ? '#065f46' : '#6ee7b7' }}>●</span>
                     )}
                   </button>
