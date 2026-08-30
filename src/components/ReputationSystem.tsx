@@ -135,18 +135,28 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
       {/* Stats Row */}
       <div className="mobile-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {[
-          { label: t('reputation.totalVendors'), value: vendorScores.length, icon: Users, iconColor: '#2563eb' },
-          { label: t('reputation.platinumTier'), value: platinumCount, icon: Trophy, iconColor: '#7c3aed' },
-          { label: t('reputation.avgScore'), value: avgScore, icon: TrendingUp, iconColor: '#059669' },
-          { label: t('reputation.totalContracts'), value: contracts.length, icon: FileText, iconColor: GOLD },
-        ].map((stat) => (
-          <div key={stat.label} style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: '12.5px', color: '#6b7280', marginBottom: 2 }}>{stat.label}</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f2942' }}>{stat.value}</div>
-              </div>
-              <stat.icon style={{ width: 28, height: 28, color: stat.iconColor }} />
+          { label: t('reputation.totalVendors'), value: vendorScores.length, icon: Users, accent: '#2563eb', bg: '#eff6ff', iconBg: '#dbeafe' },
+          { label: t('reputation.platinumTier'), value: platinumCount, icon: Trophy, accent: '#7c3aed', bg: '#f5f3ff', iconBg: '#ede9fe' },
+          { label: t('reputation.avgScore'), value: avgScore, icon: TrendingUp, accent: '#059669', bg: '#ecfdf5', iconBg: '#d1fae5' },
+          { label: t('reputation.totalContracts'), value: contracts.length, icon: FileText, accent: '#d97706', bg: '#fffbeb', iconBg: '#fef3c7' },
+        ].map((card) => (
+          <div key={card.label} style={{
+            ...cardStyle,
+            background: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '14px 16px',
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, background: card.iconBg, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <card.icon style={{ width: 20, height: 20, color: card.accent }} />
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: 2 }}>{card.label}</div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: '#0f2942' }}>{card.value}</div>
             </div>
           </div>
         ))}
@@ -222,21 +232,21 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
                       textAlign: 'center', border: '1px solid rgba(11,11,11,0.04)',
                     }}>
                       <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f2942' }}>{vendor.wonContracts}</div>
-                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.won') || 'Won'}</div>
+                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.won')}</div>
                     </div>
                     <div style={{
                       flex: 1, background: '#f9fafb', borderRadius: 6, padding: '6px 8px',
                       textAlign: 'center', border: '1px solid rgba(11,11,11,0.04)',
                     }}>
                       <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f2942' }}>{vendor.completedContracts}</div>
-                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.completed') || 'Completed'}</div>
+                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.completed')}</div>
                     </div>
                     <div style={{
                       flex: 1, background: '#f9fafb', borderRadius: 6, padding: '6px 8px',
                       textAlign: 'center', border: '1px solid rgba(11,11,11,0.04)',
                     }}>
                       <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f2942' }}>{vendor.totalBids}</div>
-                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.bids') || 'Bids'}</div>
+                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.bidsLabel')}</div>
                     </div>
                   </div>
                 </div>
@@ -291,7 +301,7 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
                           {tier.name}
                         </span>
                         <span style={{ ...badgeStyle, background: scoreStyle.bg, color: scoreStyle.color }}>
-                          {score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 60 ? 'Fair' : 'Needs Improvement'}
+                          {score >= 90 ? t('reputation.excellent') : score >= 75 ? t('reputation.good') : score >= 60 ? t('reputation.fair') : t('reputation.needsImprovement')}
                         </span>
                       </div>
                       <div style={{ display: 'flex', gap: 16, fontSize: '12px', color: '#6b7280' }}>
@@ -359,10 +369,10 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
                         display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 12,
                       }}>
                         {[
-                          { label: 'Win Rate', value: vendor.totalBids > 0 ? `${((vendor.wonContracts / vendor.totalBids) * 100).toFixed(0)}%` : '0%' },
-                          { label: 'Completion Rate', value: vendor.wonContracts > 0 ? `${((vendor.completedContracts / vendor.wonContracts) * 100).toFixed(0)}%` : 'N/A' },
-                          { label: 'Total Value', value: `${vendor.totalValue.toLocaleString()} AFN` },
-                          { label: 'Active Contracts', value: vendor.wonContracts - vendor.completedContracts },
+                          { label: t('reputation.winRate'), value: vendor.totalBids > 0 ? `${((vendor.wonContracts / vendor.totalBids) * 100).toFixed(0)}%` : '0%' },
+                          { label: t('reputation.completionRate'), value: vendor.wonContracts > 0 ? `${((vendor.completedContracts / vendor.wonContracts) * 100).toFixed(0)}%` : 'N/A' },
+                          { label: t('reputation.totalValue'), value: `${vendor.totalValue.toLocaleString()} ${t('reputation.afn')}` },
+                          { label: t('reputation.activeContracts'), value: vendor.wonContracts - vendor.completedContracts },
                         ].map((stat) => (
                           <div key={stat.label} style={{
                             background: '#f9fafb', borderRadius: 8, padding: '10px 12px',
@@ -393,7 +403,7 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
 
       {/* Scoring Methodology */}
       <div style={{
-        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 18,
+        ...cardStyle,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <Award style={{ width: 20, height: 20, color: '#0f2942' }} />

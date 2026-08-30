@@ -579,6 +579,12 @@ export const fa = {
     complianceDesc: 'امتیاز انطباق (۱۵٪): انطباق نظارتی و قراردادی',
     higherScores: 'امتیازات شهرت بالاتر، دید تأمین‌کنندگان را در داوطلبی‌ها بهبود بخشیده و اعتماد با نهادهای دولتی را ایجاد می‌کند.',
     afn: 'AFN',
+    won: 'برنده شده',
+    bidsLabel: 'پیشنهادات',
+    winRate: 'نرخ برنده شدن',
+    completionRate: 'نرخ تکمیل',
+    activeContracts: 'قراردادهای فعال',
+    needsImprovement: 'نیاز به بهبود',
   },
 
   blockchain: {

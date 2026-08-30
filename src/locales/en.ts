@@ -592,6 +592,12 @@ export const en = {
     complianceDesc: 'Compliance Score (15%): Regulatory and contractual compliance',
     higherScores: 'Higher reputation scores improve vendor visibility in tenders and establish trust with government agencies.',
     afn: 'AFN',
+    won: 'Won',
+    bidsLabel: 'Bids',
+    winRate: 'Win Rate',
+    completionRate: 'Completion Rate',
+    activeContracts: 'Active Contracts',
+    needsImprovement: 'Needs Improvement',
   },
 
   // BlockchainDashboard

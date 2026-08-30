@@ -579,6 +579,12 @@ export const ps = {
     complianceDesc: 'د انطباق امتیاز (۱۵٪): نظارتي او قراردادي انطباق',
     higherScores: 'لوړ شهرت امتیازونه په داوطلبیو کې د تأمینوونکو لیدنه ښه کوي او د دولتي ادارو سره باور رامنځته کوي.',
     afn: 'AFN',
+    won: 'ګټل شوی',
+    bidsLabel: 'وړاندیزونه',
+    winRate: 'د ګټلو نرخ',
+    completionRate: 'د بشپړیدو نرخ',
+    activeContracts: 'فعال قراردادونه',
+    needsImprovement: 'بهبود ته اړتیا لري',
   },
 
   blockchain: {
