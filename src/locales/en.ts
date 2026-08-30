@@ -10,7 +10,7 @@ export const en = {
     fontDecrease: 'Decrease font size',
     fontIncrease: 'Increase font size',
     simulationBanner: 'Simulation Mode — Roles are freely switchable for demo. Connect MetaMask wallet to authenticate your role and record transactions on Sepolia testnet.',
-    blockchainBanner: 'Blockchain Mode — Transactions are recorded on Sepolia testnet. Some features remain simulated (DAO voting, ZKP, token minting).',
+    blockchainBanner: 'Blockchain Mode — Transactions are recorded on Sepolia testnet. Some features remain simulated (ZKP, token minting).',
   },
   a11y: {
     title: 'Accessibility',
