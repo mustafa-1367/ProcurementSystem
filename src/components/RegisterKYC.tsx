@@ -292,20 +292,26 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
               <div style={{ flex: 1 }}>
                 <h3 style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 16, color: '#065f46' }}>Registration Successful</h3>
                 <p style={{ margin: '0 0 8px 0', fontSize: 14, color: '#047857' }}>
-                  <strong>{successInfo.companyName}</strong> has been registered and verified successfully.
+                  <strong>{successInfo.companyName}</strong> has been registered successfully{successInfo.onChain ? ' and verified on blockchain.' : ' (simulated — not yet on-chain).'}
                 </p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}>
                     ID: {successInfo.supplierId}
                   </span>
-                  {successInfo.onChain && (
+                  {successInfo.onChain ? (
                     <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       ● Recorded On-Chain
                     </span>
+                  ) : (
+                    <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      ● Simulated
+                    </span>
                   )}
-                  <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
-                    Eligibility Verified
-                  </span>
+                  {successInfo.onChain && (
+                    <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
+                      Eligibility Verified
+                    </span>
+                  )}
                 </div>
               </div>
               <button

@@ -28,6 +28,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
       const tenderContract = contracts.find((c) => c.tenderId === tender.id);
       const verified = blockchainRecords.some((r) => r.tenderId === tender.id);
       const budgetNum = parseBudget(tender.budget);
+      const deadlinePassed = tender.deadline && new Date(tender.deadline).getTime() <= Date.now();
 
       rows.push([
         tender.title || '',
@@ -37,9 +38,9 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
         tender.status || '',
         tender.deadline ? new Date(tender.deadline).toLocaleDateString() : '',
         String(tenderBids.length),
-        tenderContract?.vendorName || '',
-        tenderContract ? String(Number(tenderContract.amount)) : '',
-        tenderContract ? String(tenderContract.progress || 0) : '',
+        deadlinePassed ? (tenderContract?.vendorName || '') : 'Sealed',
+        deadlinePassed && tenderContract ? String(Number(tenderContract.amount)) : 'Sealed',
+        deadlinePassed && tenderContract ? String(tenderContract.progress || 0) : '',
         verified ? 'Yes' : 'No',
       ]);
     });
@@ -411,7 +412,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                       )}
 
                       {/* Contract Award */}
-                      {tenderContract && (
+                      {tenderContract && new Date(tender.deadline) <= new Date() && (
                         <div style={{ margin: '0 20px 16px', borderRadius: 10, border: '1px solid #bbf7d0', background: '#f0fdf4', overflow: 'hidden' }}>
                           <div style={{ padding: '10px 14px', background: '#dcfce7', borderBottom: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: 6 }}>
                             <CheckCircle style={{ width: 14, height: 14, color: '#0a6b0a' }} />

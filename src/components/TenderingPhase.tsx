@@ -243,12 +243,10 @@ export function TenderingPhase({
                               <div className="flex-1">
                                 <div className="flex items-center gap-3 mb-2">
                                   <span className="text-gray-900">{bid.vendorName}</span>
-                                  <span className="flex items-center gap-1 text-green-700">
-                                    <Shield className="w-4 h-4" />
-                                    {t('tendering.verified')}
-                                  </span>
-                                  {blockchainRecords.some(r => r.bidId === bid.id && r.onChain) && (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                                  {blockchainRecords.some(r => r.bidId === bid.id && r.onChain) ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● {t('tendering.verified')} (On-Chain)</span>
+                                  ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }}>● Simulated</span>
                                   )}
                                 </div>
                                 <div className="grid grid-cols-3 gap-4 text-gray-600">
