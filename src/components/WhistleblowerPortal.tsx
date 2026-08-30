@@ -281,39 +281,30 @@ export function WhistleblowerPortal({
       </div>
 
       {/* Protection Features */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <Shield className="w-8 h-8 opacity-100" />
-            <Lock className="w-6 h-6 opacity-60" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        {[
+          { label: t('whistleblower.zkpProtection'), value: t('whistleblower.zkpSimulated'), icon: Shield, accent: '#7c3aed', bg: '#f5f3ff', iconBg: '#ede9fe', isText: true },
+          { label: t('whistleblower.totalReports'), value: whistleblowerReports.length, icon: AlertTriangle, accent: '#dc2626', bg: '#fef2f2', iconBg: '#fee2e2' },
+          { label: t('whistleblower.underInvestigation'), value: underInvestigation.length, icon: Clock, accent: '#d97706', bg: '#fffbeb', iconBg: '#fef3c7' },
+          { label: t('whistleblower.resolvedLabel'), value: resolvedReports.length, icon: CheckCircle, accent: '#059669', bg: '#ecfdf5', iconBg: '#d1fae5' },
+        ].map((card, i) => (
+          <div key={i} style={{
+            background: '#fff', borderRadius: 12, padding: '14px 16px',
+            border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 9, background: card.iconBg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <card.icon style={{ width: 18, height: 18, color: card.accent }} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#9e9d99' }}>{card.label}</p>
+              <p style={{ margin: '2px 0 0', fontSize: (card as any).isText ? 12 : 20, fontWeight: 700, color: '#0b0b0b', letterSpacing: '-0.02em', lineHeight: 1.3 }}>{card.value}</p>
+            </div>
           </div>
-          <p className="opacity-100">{t('whistleblower.zkpProtection')}</p>
-          <p className="mt-1 text-sm opacity-80">{t('whistleblower.zkpSimulated')}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <AlertTriangle className="w-8 h-8 opacity-100" />
-          </div>
-          <p className="opacity-100">{t('whistleblower.totalReports')}</p>
-          <p className="mt-1">{whistleblowerReports.length}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <Clock className="w-8 h-8 opacity-100" />
-          </div>
-          <p className="opacity-100">{t('whistleblower.underInvestigation')}</p>
-          <p className="mt-1">{underInvestigation.length}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <CheckCircle className="w-8 h-8 opacity-100" />
-          </div>
-          <p className="opacity-100">{t('whistleblower.resolvedLabel')}</p>
-          <p className="mt-1">{resolvedReports.length}</p>
-        </div>
+        ))}
       </div>
 
       {/* Report Submission Form */}
@@ -569,175 +560,211 @@ export function WhistleblowerPortal({
       )}
 
       {/* Reports List */}
-      <div className="space-y-4">
-        <h3 className="text-gray-900">{t('whistleblower.allReports')}</h3>
-        
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <MessageSquare style={{ width: 16, height: 16, color: '#6e6c66' }} />
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{t('whistleblower.allReports')}</h3>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#f0f0ee', color: '#6e6c66' }}>{whistleblowerReports.length}</span>
+        </div>
+
         {whistleblowerReports.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
-            <AlertTriangle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">{t('whistleblower.noReports')}</p>
-            <p className="text-gray-500 mt-2">{t('whistleblower.reportsProtected')}</p>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', padding: '48px 24px', textAlign: 'center' }}>
+            <AlertTriangle style={{ width: 48, height: 48, color: '#d1d0cc', margin: '0 auto 12px' }} />
+            <p style={{ fontSize: 14, color: '#6e6c66', margin: 0 }}>{t('whistleblower.noReports')}</p>
+            <p style={{ fontSize: 13, color: '#9e9d99', margin: '6px 0 0' }}>{t('whistleblower.reportsProtected')}</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {whistleblowerReports.map((report) => {
-              const severityColors = {
-                low: 'bg-blue-100 text-blue-900',
-                medium: 'bg-amber-100 text-amber-900',
-                high: 'bg-orange-100 text-orange-900',
-                critical: 'bg-red-100 text-red-900',
+              const severityStyle: Record<string, { bg: string; color: string; border: string }> = {
+                low: { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+                medium: { bg: '#fffbeb', color: '#b45309', border: '#fde68a' },
+                high: { bg: '#fff7ed', color: '#c2410c', border: '#fed7aa' },
+                critical: { bg: '#fef2f2', color: '#dc2626', border: '#fecaca' },
               };
-
-              const statusColors = {
-                pending: 'bg-gray-100 text-gray-900',
-                investigating: 'bg-blue-100 text-blue-900',
-                resolved: 'bg-green-100 text-green-900',
+              const statusStyle: Record<string, { bg: string; color: string; border: string }> = {
+                pending: { bg: '#f4f4f5', color: '#52525b', border: '#e4e4e7' },
+                investigating: { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
+                resolved: { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' },
               };
+              const sev = severityStyle[report.severity] || severityStyle.medium;
+              const stat = statusStyle[report.investigationStatus] || statusStyle.pending;
 
               return (
-                <div key={report.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="text-gray-900">{report.title}</h4>
-                        <span className={`px-3 py-1 rounded-full ${severityColors[report.severity as keyof typeof severityColors]}`}>
+                <div key={report.id} style={{
+                  background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)', overflow: 'hidden',
+                }}>
+                  {/* Report Header */}
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(11,11,11,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0b0b0b' }}>{report.title}</h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: sev.bg, color: sev.color, border: `1px solid ${sev.border}`, textTransform: 'capitalize' }}>
                           {report.severity}
                         </span>
-                        <span className={`px-3 py-1 rounded-full ${statusColors[report.investigationStatus as keyof typeof statusColors]}`}>
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: stat.bg, color: stat.color, border: `1px solid ${stat.border}`, textTransform: 'capitalize' }}>
                           {report.investigationStatus}
                         </span>
                         {report.isAnonymous && (
-                          <span className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-900 rounded-full">
-                            <Shield className="w-4 h-4" />
-                            {t('whistleblower.zkpProtection')}
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Shield style={{ width: 10, height: 10 }} /> ZKP
                           </span>
                         )}
                         {blockchainRecords.some(r => r.reportId === report.id && r.onChain) && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            ● On-Chain
+                          </span>
                         )}
                       </div>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 13.5, color: '#52514e', lineHeight: 1.5 }}>{report.description}</p>
+                  </div>
 
-                      <p className="text-gray-600 mb-3">{report.description}</p>
-
-                      <div className="grid grid-cols-3 gap-4 text-gray-700 mb-3">
-                        <div>
-                          <p className="text-gray-500">{t('whistleblower.category')}</p>
-                          <p>{report.category}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">{t('whistleblower.submitted')}</p>
-                          <p>{new Date(report.submittedAt).toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-500">{t('whistleblower.zkProof')}</p>
-                          <p className="font-mono text-sm">{report.zkProof}</p>
-                        </div>
+                  {/* Report Details */}
+                  <div style={{ padding: '14px 20px' }}>
+                    {/* Meta Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#9e9d99', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{t('whistleblower.category')}</div>
+                        <div style={{ fontSize: 13.5, color: '#0b0b0b', fontWeight: 500 }}>{report.category}</div>
                       </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#9e9d99', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{t('whistleblower.submitted')}</div>
+                        <div style={{ fontSize: 13.5, color: '#0b0b0b', fontWeight: 500 }}>{new Date(report.submittedAt).toLocaleDateString()}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#9e9d99', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>{t('whistleblower.zkProof')}</div>
+                        <div style={{ fontSize: 12, color: '#0b0b0b', fontWeight: 500, fontFamily: 'ui-monospace, monospace' }}>{report.zkProof}</div>
+                      </div>
+                    </div>
 
-                      {report.evidence && (
-                        <div className="bg-gray-50 p-4 rounded-lg mb-3">
-                          <p className="text-gray-700 mb-1">{t('whistleblower.evidenceLabel')}</p>
-                          <p className="text-gray-600">{report.evidence}</p>
-                        </div>
-                      )}
+                    {/* Evidence */}
+                    {report.evidence && (
+                      <div style={{ background: '#fafaf9', border: '1px solid rgba(11,11,11,0.06)', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#9e9d99', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{t('whistleblower.evidenceLabel')}</div>
+                        <div style={{ fontSize: 13, color: '#52514e', lineHeight: 1.5 }}>{report.evidence}</div>
+                      </div>
+                    )}
 
-                      {/* Routing Info */}
-                      {report.routedTo && (
-                        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2 mb-3">
-                          <Shield className="w-4 h-4 text-indigo-600" />
-                          <span className="text-sm text-indigo-800">
-                            {t('whistleblower.routedTo')}: <strong>{getAuthorityLabel(report.routedTo)}</strong>
+                    {/* Routing Info */}
+                    {report.routedTo && (
+                      <div style={{ background: '#f5f3ff', border: '1px solid #ede9fe', borderRadius: 8, padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Shield style={{ width: 14, height: 14, color: '#7c3aed', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: '#5b21b6' }}>
+                          {t('whistleblower.routedTo')}: <strong>{getAuthorityLabel(report.routedTo)}</strong>
+                        </span>
+                        {report.reporterType && (
+                          <span style={{ fontSize: 11, color: '#7c3aed', marginLeft: 4 }}>
+                            ({report.reporterType === 'government_employee' ? t('whistleblower.governmentEmployee') : report.reporterType === 'citizen' ? t('whistleblower.citizenReporter') : t('whistleblower.companySupplier')})
                           </span>
-                          {report.reporterType && (
-                            <span className="text-xs text-indigo-600 ml-2">
-                              ({report.reporterType === 'government_employee' ? t('whistleblower.governmentEmployee') : report.reporterType === 'citizen' ? t('whistleblower.citizenReporter') : t('whistleblower.companySupplier')})
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
+                    )}
 
-                      {report.rewards?.eligible && (
-                        <div className={`${report.rewards.status === 'awarded' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-lg p-3 flex items-center justify-between mb-3`}>
-                          <div className="flex items-center gap-2">
-                            <Coins className={`w-4 h-4 ${report.rewards.status === 'awarded' ? 'text-green-600' : 'text-amber-600'}`} />
-                            <p className={report.rewards.status === 'awarded' ? 'text-green-800' : 'text-amber-800'}>
-                              {report.rewards.status === 'awarded'
-                                ? `${t('whistleblower.rewardReceived')} (${report.rewards.amount} TOK)`
-                                : t('whistleblower.rewardPendingInvestigation')}
-                            </p>
-                          </div>
-                          {report.rewards.status === 'awarded' && report.rewards.amount > 0 && (
-                            <span className="text-green-700 font-bold">+{report.rewards.amount} TOK</span>
-                          )}
+                    {/* Reward Status */}
+                    {report.rewards?.eligible && (
+                      <div style={{
+                        background: report.rewards.status === 'awarded' ? '#ecfdf5' : '#fffbeb',
+                        border: `1px solid ${report.rewards.status === 'awarded' ? '#a7f3d0' : '#fde68a'}`,
+                        borderRadius: 8, padding: '10px 14px', marginBottom: 12,
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Coins style={{ width: 14, height: 14, color: report.rewards.status === 'awarded' ? '#059669' : '#d97706' }} />
+                          <span style={{ fontSize: 13, color: report.rewards.status === 'awarded' ? '#065f46' : '#92400e' }}>
+                            {report.rewards.status === 'awarded'
+                              ? `${t('whistleblower.rewardReceived')} (${report.rewards.amount} TOK)`
+                              : t('whistleblower.rewardPendingInvestigation')}
+                          </span>
                         </div>
-                      )}
+                        {report.rewards.status === 'awarded' && report.rewards.amount > 0 && (
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>+{report.rewards.amount} TOK</span>
+                        )}
+                      </div>
+                    )}
 
-                      {/* Referral System & Escalation */}
-                      <div className="flex items-center gap-3 mb-3">
+                    {/* Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <button
+                        onClick={() => setReferralOpen(referralOpen === report.id ? null : report.id)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600,
+                          color: '#52514e', background: '#f4f4f2', border: '1px solid #e1e0d9', borderRadius: 8,
+                          padding: '6px 12px', cursor: 'pointer',
+                        }}
+                      >
+                        <Send style={{ width: 12, height: 12 }} />
+                        {t('whistleblower.referToAuthority')}
+                      </button>
+                      {!report.escalatedToDAO ? (
                         <button
-                          onClick={() => setReferralOpen(referralOpen === report.id ? null : report.id)}
-                          className="flex items-center gap-2 text-sm bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+                          onClick={() => handleEscalateToDAO(report)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 600,
+                            color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+                            padding: '6px 12px', cursor: 'pointer',
+                          }}
                         >
-                          <Send className="w-3.5 h-3.5" />
-                          {t('whistleblower.referToAuthority')}
+                          <AlertTriangle style={{ width: 12, height: 12 }} />
+                          {t('whistleblower.escalateToDAO')}
                         </button>
-                        {!report.escalatedToDAO ? (
-                          <button
-                            onClick={() => handleEscalateToDAO(report)}
-                            className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
-                          >
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            {t('whistleblower.escalateToDAO')}
-                          </button>
-                        ) : (
-                          <span className="flex items-center gap-1.5 text-xs bg-green-50 text-green-700 border border-green-200 px-3 py-1.5 rounded-full">
-                            <CheckCircle className="w-3 h-3" />
-                            {t('whistleblower.escalatedToDAO')}
-                          </span>
-                        )}
-                      </div>
-
-                      {referralOpen === report.id && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 flex items-center gap-3">
-                          <select
-                            value={referralTarget}
-                            onChange={(e) => setReferralTarget(e.target.value)}
-                            className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                          >
-                            <option value="">{t('whistleblower.selectAuthority')}</option>
-                            {ROUTING_AUTHORITIES.map((auth) => (
-                              <option key={auth.value} value={auth.value}>{auth.label}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => referralTarget && handleReferReport(report.id, referralTarget)}
-                            disabled={!referralTarget}
-                            className="flex items-center gap-1.5 text-sm bg-orange-600 text-white px-3 py-1.5 rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                            {t('whistleblower.referToAuthority')}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Referral History */}
-                      {report.referrals && report.referrals.length > 0 && (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                          <p className="text-sm font-semibold text-gray-700 mb-2">{t('whistleblower.referralHistory')}</p>
-                          <div className="space-y-1.5">
-                            {report.referrals.map((ref: any, idx: number) => (
-                              <div key={idx} className="flex items-center justify-between text-sm">
-                                <div className="flex items-center gap-2">
-                                  <Send className="w-3 h-3 text-gray-500" />
-                                  <span className="text-gray-700">{getAuthorityLabel(ref.authority)}</span>
-                                </div>
-                                <span className="text-gray-500 text-xs">{new Date(ref.referredAt).toLocaleDateString()}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                      ) : (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
+                          padding: '4px 10px', borderRadius: 999, background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0',
+                        }}>
+                          <CheckCircle style={{ width: 11, height: 11 }} />
+                          {t('whistleblower.escalatedToDAO')}
+                        </span>
                       )}
                     </div>
+
+                    {/* Referral Dropdown */}
+                    {referralOpen === report.id && (
+                      <div style={{ background: '#fafaf9', border: '1px solid rgba(11,11,11,0.08)', borderRadius: 8, padding: 12, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <select
+                          value={referralTarget}
+                          onChange={(e) => setReferralTarget(e.target.value)}
+                          style={{ flex: 1, padding: '7px 10px', fontSize: 13, borderRadius: 8, border: '1px solid #e1e0d9', background: '#fff', color: '#0b0b0b', outline: 'none' }}
+                        >
+                          <option value="">{t('whistleblower.selectAuthority')}</option>
+                          {ROUTING_AUTHORITIES.map((auth) => (
+                            <option key={auth.value} value={auth.value}>{auth.label}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => referralTarget && handleReferReport(report.id, referralTarget)}
+                          disabled={!referralTarget}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700,
+                            color: '#fff', background: referralTarget ? '#0f2942' : '#9e9d99', border: 'none', borderRadius: 8,
+                            padding: '7px 14px', cursor: referralTarget ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          <Send style={{ width: 12, height: 12 }} />
+                          {t('whistleblower.referToAuthority')}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Referral History */}
+                    {report.referrals && report.referrals.length > 0 && (
+                      <div style={{ background: '#fafaf9', border: '1px solid rgba(11,11,11,0.06)', borderRadius: 8, padding: '10px 14px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#52514e', marginBottom: 8 }}>{t('whistleblower.referralHistory')}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {report.referrals.map((ref: any, idx: number) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Send style={{ width: 11, height: 11, color: '#9e9d99' }} />
+                                <span style={{ color: '#0b0b0b' }}>{getAuthorityLabel(ref.authority)}</span>
+                              </div>
+                              <span style={{ fontSize: 11, color: '#9e9d99' }}>{new Date(ref.referredAt).toLocaleDateString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

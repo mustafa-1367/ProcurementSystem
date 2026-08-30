@@ -103,6 +103,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       budget: formData.budget,
       deadline: formData.deadline,
       department: formData.department,
+      localTenderId: newTender.id,
     });
 
     const blockchainRecord = {

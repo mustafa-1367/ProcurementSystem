@@ -47,6 +47,15 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
     }
     setEligibilityError(false);
 
+    // Prevent duplicate bids — one bid per supplier per tender
+    const alreadyBid = bids.some(
+      (b) => b.tenderId === selectedTender.id && b.vendorName?.toLowerCase().trim() === bidForm.vendorName?.toLowerCase().trim()
+    );
+    if (alreadyBid) {
+      alert(t('tendering.duplicateBid'));
+      return;
+    }
+
     const newBid = {
       id: `BID-${Date.now()}`,
       tenderId: selectedTender.id,

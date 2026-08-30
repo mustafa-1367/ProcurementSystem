@@ -154,49 +154,89 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
 
       {/* Leaderboard Podium — Top 3 */}
       {vendorScores.length > 0 && (
-        <div style={{
-          background: 'linear-gradient(135deg, #0f2942 0%, #1e3a5f 50%, #0f2942 100%)',
-          borderRadius: 12, padding: '24px 20px', color: '#fff',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-            <Trophy style={{ width: 22, height: 22, color: GOLD }} />
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{t('reputation.topPerformers')}</h3>
+        <div style={{ ...cardStyle, padding: '20px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 8, background: '#fffbeb',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Trophy style={{ width: 18, height: 18, color: '#d97706' }} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f2942' }}>{t('reputation.topPerformers')}</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: vendorScores.length >= 3 ? '1fr 1fr 1fr' : `repeat(${Math.min(vendorScores.length, 3)}, 1fr)`, gap: 12 }}>
             {vendorScores.slice(0, 3).map((vendor: any, idx: number) => {
-              const medals = ['#FFD700', '#C0C0C0', '#CD7F32'];
-              const positions = ['1st', '2nd', '3rd'];
+              const medalColors = [
+                { bg: '#fffbeb', border: '#fcd34d', text: '#92400e', medal: '#F59E0B' },
+                { bg: '#f8fafc', border: '#cbd5e1', text: '#475569', medal: '#94a3b8' },
+                { bg: '#fff7ed', border: '#fdba74', text: '#9a3412', medal: '#f97316' },
+              ];
+              const m = medalColors[idx];
               const tier = getTier(Number(vendor.reputationScore));
+              const score = Number(vendor.reputationScore);
               return (
                 <div key={vendor.name} style={{
-                  background: 'rgba(255,255,255,0.08)',
-                  backdropFilter: 'blur(8px)',
+                  background: '#fff',
                   borderRadius: 10,
-                  padding: 16,
-                  border: `1px solid ${idx === 0 ? 'rgba(201,154,60,0.4)' : 'rgba(255,255,255,0.10)'}`,
+                  padding: '16px 14px',
+                  border: `1.5px solid ${m.border}`,
+                  position: 'relative',
+                  ...(idx === 0 ? { boxShadow: '0 0 0 1px rgba(245, 158, 11, 0.15), 0 4px 12px rgba(245, 158, 11, 0.08)' } : {}),
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%',
-                      background: medals[idx], display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '14px', fontWeight: 800, color: idx === 0 ? '#92400e' : '#fff',
-                    }}>
-                      {idx + 1}
+                  {/* Rank medal + Tier badge row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: '50%',
+                        background: m.medal, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '12px', fontWeight: 800, color: '#fff',
+                        boxShadow: idx === 0 ? '0 2px 6px rgba(245, 158, 11, 0.35)' : 'none',
+                      }}>
+                        {idx + 1}
+                      </div>
+                      <span style={{ fontWeight: 700, fontSize: '14px', color: '#0f2942' }}>{vendor.name}</span>
                     </div>
                     <span style={{ ...badgeStyle, background: tier.bg, color: tier.color, border: `1px solid ${tier.border}`, fontSize: '10px' }}>
                       {tier.name}
                     </span>
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: '15px', marginBottom: 2 }}>{vendor.name}</div>
-                  <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: 10 }}>{vendor.email}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                    <div>
-                      <div style={{ fontSize: '28px', fontWeight: 800, color: GOLD, lineHeight: 1 }}>{vendor.reputationScore}</div>
-                      <div style={{ fontSize: '11px', opacity: 0.6 }}>/100 score</div>
+
+                  {/* Score with progress bar */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
+                      <span style={{ fontSize: '26px', fontWeight: 800, color: m.text, lineHeight: 1 }}>{vendor.reputationScore}</span>
+                      <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: 500 }}>/100</span>
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: '12px', opacity: 0.8 }}>
-                      <div>{vendor.wonContracts} won</div>
-                      <div>{vendor.completedContracts} completed</div>
+                    <div style={{ width: '100%', height: 5, background: '#f3f4f6', borderRadius: 999, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${score}%`, height: '100%', background: m.medal,
+                        borderRadius: 999, transition: 'width 0.5s ease',
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Stats row */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{
+                      flex: 1, background: '#f9fafb', borderRadius: 6, padding: '6px 8px',
+                      textAlign: 'center', border: '1px solid rgba(11,11,11,0.04)',
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f2942' }}>{vendor.wonContracts}</div>
+                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.won') || 'Won'}</div>
+                    </div>
+                    <div style={{
+                      flex: 1, background: '#f9fafb', borderRadius: 6, padding: '6px 8px',
+                      textAlign: 'center', border: '1px solid rgba(11,11,11,0.04)',
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f2942' }}>{vendor.completedContracts}</div>
+                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.completed') || 'Completed'}</div>
+                    </div>
+                    <div style={{
+                      flex: 1, background: '#f9fafb', borderRadius: 6, padding: '6px 8px',
+                      textAlign: 'center', border: '1px solid rgba(11,11,11,0.04)',
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f2942' }}>{vendor.totalBids}</div>
+                      <div style={{ fontSize: '10px', color: '#6b7280' }}>{t('reputation.bids') || 'Bids'}</div>
                     </div>
                   </div>
                 </div>

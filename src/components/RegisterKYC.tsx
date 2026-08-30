@@ -148,38 +148,6 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
         </div>
       )}
 
-      {/* Success Confirmation */}
-      {successInfo && (
-        <div style={{ background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 10, padding: 18, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-          <CheckCircle style={{ width: 24, height: 24, color: '#065f46', flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1 }}>
-            <h3 style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 16, color: '#065f46' }}>Registration Successful</h3>
-            <p style={{ margin: '0 0 8px 0', fontSize: 14, color: '#047857' }}>
-              <strong>{successInfo.companyName}</strong> has been registered and verified successfully.
-            </p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}>
-                ID: {successInfo.supplierId}
-              </span>
-              {successInfo.onChain && (
-                <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  ● Recorded On-Chain
-                </span>
-              )}
-              <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
-                Eligibility Verified
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => setSuccessInfo(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280', padding: 4 }}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {/* Registration Form */}
       <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
         <h2 style={{ margin: '0 0 12px 0', fontWeight: 700, fontSize: 20, color: '#0b0b0b' }}>Register New Supplier</h2>
@@ -316,6 +284,38 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
           >
             {t('register.submit')}
           </button>
+
+          {/* Success Confirmation */}
+          {successInfo && (
+            <div style={{ background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 10, padding: 18, marginTop: 16, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <CheckCircle style={{ width: 24, height: 24, color: '#065f46', flexShrink: 0, marginTop: 2 }} />
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 16, color: '#065f46' }}>Registration Successful</h3>
+                <p style={{ margin: '0 0 8px 0', fontSize: 14, color: '#047857' }}>
+                  <strong>{successInfo.companyName}</strong> has been registered and verified successfully.
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                    ID: {successInfo.supplierId}
+                  </span>
+                  {successInfo.onChain && (
+                    <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      ● Recorded On-Chain
+                    </span>
+                  )}
+                  <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }}>
+                    Eligibility Verified
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSuccessInfo(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280', padding: 4 }}
+              >
+                ×
+              </button>
+            </div>
+          )}
         </form>
       </div>
 

@@ -36,6 +36,9 @@ export interface ProcurementRecordResult {
 // On-chain operations — call real smart contracts via MetaMask
 // ═══════════════════════════════════════════════════════════════════════
 
+// Cache mapping local tender IDs to on-chain tender IDs
+const onChainTenderIdCache: Record<string, string> = {};
+
 async function onChainTender(
   procContract: Contract,
   data: Record<string, unknown>
@@ -45,6 +48,19 @@ async function onChainTender(
   const deadline = BigInt(Math.floor(new Date(String(data.deadline)).getTime() / 1000));
   const tx = await procContract.createTender(title, budget, deadline);
   const receipt = await tx.wait();
+
+  // Extract on-chain tender ID from event and cache it
+  const event = receipt.logs?.find((log: any) => {
+    try { return procContract.interface.parseLog(log)?.name === 'TenderCreated'; } catch { return false; }
+  });
+  if (event && data.localTenderId) {
+    const onChainId = procContract.interface.parseLog(event)?.args?.[0];
+    if (onChainId) {
+      onChainTenderIdCache[data.localTenderId as string] = onChainId;
+      console.log('[Blockchain] Cached on-chain tender ID for', data.localTenderId);
+    }
+  }
+
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
 }
 
@@ -52,7 +68,9 @@ async function onChainPublishTender(
   procContract: Contract,
   data: Record<string, unknown>
 ): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
-  const tenderId = keccak256(data.tenderId as string);
+  // Use cached on-chain ID if available, otherwise fall back to keccak hash
+  const localId = data.tenderId as string;
+  const tenderId = onChainTenderIdCache[localId] || keccak256(localId);
   const tx = await procContract.publishTender(tenderId);
   const receipt = await tx.wait();
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
@@ -62,39 +80,48 @@ async function onChainBid(
   procContract: Contract,
   data: Record<string, unknown>
 ): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
+  const localTenderId = data.tenderId as string;
   const amount = BigInt(Number(String(data.amount).replace(/,/g, '')) || 0);
 
-  // Try to submit the bid directly first
-  const tenderId = keccak256(data.tenderId as string);
-  try {
-    const tx = await procContract.submitBid(tenderId, amount);
+  // Check if we already have the on-chain tender ID cached
+  const cachedId = onChainTenderIdCache[localTenderId];
+  if (cachedId) {
+    console.log('[Blockchain] Using cached on-chain tender ID for', localTenderId);
+    const tx = await procContract.submitBid(cachedId, amount);
     const receipt = await tx.wait();
     return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+  }
+
+  // No cached ID — try with keccak hash first, then create if needed
+  const hashedId = keccak256(localTenderId);
+  try {
+    const tx = await procContract.submitBid(hashedId, amount);
+    const receipt = await tx.wait();
+    onChainTenderIdCache[localTenderId] = hashedId;
+    return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
   } catch (bidErr: any) {
-    // If tender doesn't exist or isn't published on-chain, create & publish it first
     if (bidErr?.reason === 'Tender not published' || bidErr?.reason === 'Tender does not exist') {
       console.log('[Blockchain] Tender not on-chain yet, creating & publishing first...');
-      const title = String(data.vendor || data.tenderId || '');
+      const title = String(data.vendor || localTenderId || '');
       const budget = BigInt(Number(String(data.amount).replace(/,/g, '')) || 0);
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400 * 30); // 30 days from now
+      const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400 * 30);
 
-      // Create tender on-chain — returns the on-chain tenderId
       const createTx = await procContract.createTender(title, budget, deadline);
       const createReceipt = await createTx.wait();
 
-      // Get the tenderId from the event log
       const tenderCreatedEvent = createReceipt.logs?.find((log: any) => {
         try { return procContract.interface.parseLog(log)?.name === 'TenderCreated'; } catch { return false; }
       });
       const onChainTenderId = tenderCreatedEvent
         ? procContract.interface.parseLog(tenderCreatedEvent)?.args?.[0]
-        : tenderId;
+        : hashedId;
 
-      // Publish the tender
+      // Cache it for future bids
+      onChainTenderIdCache[localTenderId] = onChainTenderId;
+
       const pubTx = await procContract.publishTender(onChainTenderId);
       await pubTx.wait();
 
-      // Now submit the bid with the on-chain tenderId
       const tx = await procContract.submitBid(onChainTenderId, amount);
       const receipt = await tx.wait();
       return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };

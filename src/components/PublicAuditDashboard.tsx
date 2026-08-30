@@ -107,42 +107,30 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <Banknote className="w-8 h-8 opacity-100" />
-            <Activity className="w-6 h-6 opacity-100" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        {[
+          { label: t('audit.totalBudget'), value: `${totalBudget.toLocaleString()} ${t('audit.afn')}`, icon: Banknote, accent: '#1d4ed8', bg: '#eff6ff', iconBg: '#dbeafe' },
+          { label: t('audit.activeTenders'), value: tenders.filter((tender) => tender.status === 'published').length, icon: FileText, accent: '#059669', bg: '#ecfdf5', iconBg: '#d1fae5' },
+          { label: t('audit.avgBids'), value: avgBidsPerTender, icon: BarChart3, accent: '#7c3aed', bg: '#f5f3ff', iconBg: '#ede9fe' },
+          { label: t('audit.completionRate'), value: `${completionRate}%`, icon: PieChart, accent: '#d97706', bg: '#fffbeb', iconBg: '#fef3c7' },
+        ].map((card, i) => (
+          <div key={i} style={{
+            background: '#fff', borderRadius: 12, padding: '20px 18px',
+            border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            display: 'flex', flexDirection: 'column', gap: 12,
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, background: card.iconBg,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <card.icon style={{ width: 20, height: 20, color: card.accent }} />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: '#6e6c66' }}>{card.label}</p>
+              <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: '#0b0b0b', letterSpacing: '-0.02em' }}>{card.value}</p>
+            </div>
           </div>
-          <p className="opacity-100">{t('audit.totalBudget')}</p>
-          <p className="mt-1">{totalBudget.toLocaleString()} {t('audit.afn')}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <FileText className="w-8 h-8 opacity-100" />
-            <TrendingUp className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100">{t('audit.activeTenders')}</p>
-          <p className="mt-1">{tenders.filter((tender) => tender.status === 'published').length}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <BarChart3 className="w-8 h-8 opacity-100" />
-            <Activity className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100">{t('audit.avgBids')}</p>
-          <p className="mt-1">{avgBidsPerTender}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <PieChart className="w-8 h-8 opacity-100" />
-            <Activity className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100">{t('audit.completionRate')}</p>
-          <p className="mt-1">{completionRate}%</p>
-        </div>
+        ))}
       </div>
 
       {/* Category Breakdown */}
