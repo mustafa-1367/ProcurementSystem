@@ -12,6 +12,7 @@ interface WhistleblowerPortalProps {
   setDisputes: (disputes: any[]) => void;
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
+  userRole: string;
 }
 
 export function WhistleblowerPortal({
@@ -23,6 +24,7 @@ export function WhistleblowerPortal({
   setDisputes,
   setBlockchainRecords,
   blockchainRecords,
+  userRole,
 }: WhistleblowerPortalProps) {
   const [showReportForm, setShowReportForm] = useState(false);
   const [anonymousMode, setAnonymousMode] = useState(true);
@@ -247,6 +249,18 @@ export function WhistleblowerPortal({
     ));
   };
 
+  const handleUpdateInvestigation = (reportId: string, newStatus: string) => {
+    const updatedReports = reports.map((r) => {
+      if (r.id !== reportId) return r;
+      const updated = { ...r, investigationStatus: newStatus };
+      if (newStatus === 'resolved' && r.rewards) {
+        updated.rewards = { ...r.rewards, status: 'awarded' };
+      }
+      return updated;
+    });
+    setReports(updatedReports);
+  };
+
   const categories = [
     { value: 'Fraud', label: t('whistleblower.fraud') },
     { value: 'Corruption', label: t('whistleblower.corruption') },
@@ -278,6 +292,18 @@ export function WhistleblowerPortal({
           <AlertTriangle className="w-5 h-5" />
           {t('whistleblower.submitReport')}
         </button>
+      </div>
+
+      {/* Simulated UX Flow Banner */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 18px',
+      }}>
+        <AlertTriangle style={{ width: 20, height: 20, color: '#d97706', flexShrink: 0, marginTop: 1 }} />
+        <div>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#92400e' }}>{t('whistleblower.simulatedFlowNotice')}</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#a16207', lineHeight: 1.5 }}>{t('whistleblower.simulatedFlowDesc')}</p>
+        </div>
       </div>
 
       {/* Protection Features */}
@@ -608,7 +634,7 @@ export function WhistleblowerPortal({
                         </span>
                         {report.isAnonymous && (
                           <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <Shield style={{ width: 10, height: 10 }} /> ZKP
+                            <Shield style={{ width: 10, height: 10 }} /> Simulated ZKP
                           </span>
                         )}
                         {blockchainRecords.some(r => r.reportId === report.id && r.onChain) && (
@@ -681,6 +707,48 @@ export function WhistleblowerPortal({
                         {report.rewards.status === 'awarded' && report.rewards.amount > 0 && (
                           <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>+{report.rewards.amount} TOK</span>
                         )}
+                      </div>
+                    )}
+
+                    {/* Investigation Workflow — only for oversight/auditor roles */}
+                    {(userRole === 'oversight' || userRole === 'auditor') && report.investigationStatus === 'pending' && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8,
+                        padding: '10px 14px', marginBottom: 12,
+                      }}>
+                        <Eye style={{ width: 16, height: 16, color: '#0369a1', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: '#0c4a6e', flex: 1 }}>{t('whistleblower.investigationRequired')}</span>
+                        <button
+                          onClick={() => handleUpdateInvestigation(report.id, 'investigating')}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700,
+                            color: '#fff', background: '#0369a1', border: 'none', borderRadius: 8,
+                            padding: '7px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          {t('whistleblower.startInvestigation')}
+                        </button>
+                      </div>
+                    )}
+                    {(userRole === 'oversight' || userRole === 'auditor') && report.investigationStatus === 'investigating' && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8,
+                        padding: '10px 14px', marginBottom: 12,
+                      }}>
+                        <CheckCircle style={{ width: 16, height: 16, color: '#059669', flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, color: '#065f46', flex: 1 }}>{t('whistleblower.investigationRequired')}</span>
+                        <button
+                          onClick={() => handleUpdateInvestigation(report.id, 'resolved')}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700,
+                            color: '#fff', background: '#059669', border: 'none', borderRadius: 8,
+                            padding: '7px 14px', cursor: 'pointer',
+                          }}
+                        >
+                          {t('whistleblower.markResolved')}
+                        </button>
                       </div>
                     )}
 

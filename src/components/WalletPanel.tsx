@@ -24,15 +24,18 @@ export function WalletPanel({
 }: WalletPanelProps) {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
+  const [mintCount, setMintCount] = useState(0);
   const { t } = useTranslation();
 
   const MAX_MINT_BALANCE = 5000;
-  const canMint = balance < MAX_MINT_BALANCE;
+  const MAX_MINTS_PER_SESSION = 3;
+  const canMint = balance < MAX_MINT_BALANCE && mintCount < MAX_MINTS_PER_SESSION;
 
   const handleMint = () => {
     if (!canMint) return;
     const minted = Math.min(1000, MAX_MINT_BALANCE - balance);
     setBalance(balance + minted);
+    setMintCount(prev => prev + 1);
     const block = blockchain.addBlock({ type: 'token_mint', amount: minted, timestamp: Date.now() });
     const tx = { id: block.hash, type: 'mint', amount: minted, timestamp: Date.now() };
     setTransactions([tx, ...transactions]);
@@ -70,7 +73,7 @@ export function WalletPanel({
           <div className="flex items-center gap-3">
             <CreditCard className="w-6 h-6 text-gray-700" />
             <div>
-              <div className="text-gray-900 font-medium">{t('wallet.title')}</div>
+              <div className="text-gray-900 font-medium">{t('wallet.title')} <span style={{ fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fffbeb', border: '1px solid #fde68a', padding: '1px 8px', borderRadius: 999 }}>({t('wallet.simulated')})</span></div>
               <div className="text-gray-600 text-sm">{t('wallet.balance')} {balance} {t('wallet.tok')}</div>
             </div>
           </div>
@@ -78,6 +81,11 @@ export function WalletPanel({
             <button onClick={handleMint} disabled={!canMint} className={`flex items-center gap-2 px-3 py-1 rounded focus:ring-2 focus:ring-green-400 focus:outline-none ${canMint ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
               <PlusCircle className="w-4 h-4" /> {t('wallet.mint')}
             </button>
+            {mintCount > 0 && (
+              <span style={{ fontSize: 11, color: '#6b7280' }}>
+                {MAX_MINTS_PER_SESSION - mintCount} {t('wallet.mintsRemaining')}
+              </span>
+            )}
             <button onClick={onClose} aria-label="Close" className="p-2 rounded hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none">
               <X className="w-5 h-5 text-gray-700" />
             </button>
@@ -85,6 +93,14 @@ export function WalletPanel({
         </div>
 
         <div className="p-6 space-y-4">
+          {/* Simulation Disclaimer */}
+          <div style={{
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+            padding: '10px 14px', fontSize: 12, color: '#92400e', lineHeight: 1.5,
+          }}>
+            {t('wallet.simulationDisclaimer')}
+          </div>
+
           <form onSubmit={handleTransfer} className="grid grid-cols-1 gap-3">
             <div>
               <label className="block text-gray-700 mb-1">{t('wallet.recipientAddress')}</label>

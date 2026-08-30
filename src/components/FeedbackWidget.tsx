@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, X, ArrowLeft, Bug, Lightbulb, HelpCircle, Paperclip, FileText, Image, Video } from 'lucide-react';
+import { MessageSquare, X, ArrowLeft, Bug, Lightbulb, HelpCircle, Paperclip, FileText, Image, Video, Send } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 
 type View = 'menu' | 'bug' | 'feature' | 'question';
@@ -38,7 +38,6 @@ export function FeedbackWidget() {
       const newFiles = Array.from(files);
       setAttachments(prev => [...prev, ...newFiles]);
     }
-    // Reset so same file can be re-selected
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -67,16 +66,16 @@ export function FeedbackWidget() {
     }, 2000);
   };
 
-  const options = [
-    { id: 'bug' as View, icon: Bug, label: t('feedback.reportBug') },
-    { id: 'feature' as View, icon: Lightbulb, label: t('feedback.requestFeature') },
-    { id: 'question' as View, icon: HelpCircle, label: t('feedback.askQuestion') },
+  const options: { id: View; icon: any; label: string; desc: string; iconBg: string; iconColor: string }[] = [
+    { id: 'bug', icon: Bug, label: t('feedback.reportBug'), desc: t('feedback.bugDesc'), iconBg: '#fef2f2', iconColor: '#dc2626' },
+    { id: 'feature', icon: Lightbulb, label: t('feedback.requestFeature'), desc: t('feedback.featureDesc'), iconBg: '#fffbeb', iconColor: '#d97706' },
+    { id: 'question', icon: HelpCircle, label: t('feedback.askQuestion'), desc: t('feedback.questionDesc'), iconBg: '#eff6ff', iconColor: '#2563eb' },
   ];
 
-  const viewTitle: Record<Exclude<View, 'menu'>, string> = {
-    bug: t('feedback.reportBug'),
-    feature: t('feedback.requestFeature'),
-    question: t('feedback.askQuestion'),
+  const viewConfig: Record<Exclude<View, 'menu'>, { title: string; iconBg: string; iconColor: string; icon: any }> = {
+    bug: { title: t('feedback.reportBug'), iconBg: '#fef2f2', iconColor: '#dc2626', icon: Bug },
+    feature: { title: t('feedback.requestFeature'), iconBg: '#fffbeb', iconColor: '#d97706', icon: Lightbulb },
+    question: { title: t('feedback.askQuestion'), iconBg: '#eff6ff', iconColor: '#2563eb', icon: HelpCircle },
   };
 
   return createPortal(
@@ -85,11 +84,20 @@ export function FeedbackWidget() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         aria-label={t('feedback.title')}
-        style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999, padding: '10px 20px' }}
-        className="flex items-center gap-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+          padding: '11px 22px', border: 'none', cursor: 'pointer',
+          background: 'linear-gradient(135deg, #0f2942 0%, #173d61 100%)',
+          color: '#fff', borderRadius: 14,
+          boxShadow: '0 4px 16px rgba(15, 41, 66, 0.35)',
+          display: 'flex', alignItems: 'center', gap: 9,
+          transition: 'all .2s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(15, 41, 66, 0.45)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(15, 41, 66, 0.35)'; }}
       >
-        {isOpen ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
-        <span className="text-base font-semibold">{t('feedback.button')}</span>
+        {isOpen ? <X style={{ width: 18, height: 18 }} /> : <MessageSquare style={{ width: 18, height: 18 }} />}
+        <span style={{ fontSize: 14, fontWeight: 700 }}>{t('feedback.button')}</span>
       </button>
 
       {/* Panel */}
@@ -102,39 +110,92 @@ export function FeedbackWidget() {
             onClick={resetAndClose}
           />
 
-          <div
-            style={{ position: 'fixed', bottom: '80px', right: '24px', zIndex: 9999, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}
-            className="w-96 bg-white rounded-xl shadow-2xl border border-gray-200"
-          >
+          <div style={{
+            position: 'fixed', bottom: 80, right: 24, zIndex: 9999,
+            width: 380, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto',
+            background: '#fff', borderRadius: 16,
+            boxShadow: '0 12px 40px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.05)',
+            animation: 'feedbackSlideUp .25s ease-out',
+          }}>
             {/* Success state */}
             {submitted ? (
-              <div className="px-6 py-12 text-center">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 16px',
+                }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
                   </svg>
                 </div>
-                <h3 className="text-gray-900 font-semibold text-lg">{t('feedback.thankYou')}</h3>
-                <p className="text-gray-600 text-sm mt-1">{t('feedback.thankYouMsg')}</p>
+                <h3 style={{ margin: '0 0 6px', fontSize: 18, fontWeight: 700, color: '#0f2942' }}>{t('feedback.thankYou')}</h3>
+                <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>{t('feedback.thankYouMsg')}</p>
               </div>
             ) : view === 'menu' ? (
               /* Main Menu */
               <>
-                <div className="px-6 py-5 border-b border-gray-200">
-                  <h2 className="text-gray-900 text-lg font-semibold">{t('feedback.title')}</h2>
-                  <p className="text-gray-600 text-sm mt-1">{t('feedback.subtitle')}</p>
+                {/* Header with accent bar */}
+                <div style={{
+                  padding: '22px 24px 18px',
+                  background: 'linear-gradient(135deg, #0f2942 0%, #173d61 100%)',
+                  borderRadius: '16px 16px 0 0',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      background: 'rgba(201, 154, 60, 0.2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <MessageSquare style={{ width: 18, height: 18, color: '#e0b658' }} />
+                    </div>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff' }}>{t('feedback.title')}</h2>
+                      <p style={{ margin: 0, fontSize: 12.5, color: '#94a3b8', marginTop: 2 }}>{t('feedback.subtitle')}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="p-4 space-y-2">
+
+                {/* Menu options */}
+                <div style={{ padding: '16px 16px 20px' }}>
                   {options.map((opt) => {
                     const Icon = opt.icon;
                     return (
                       <button
                         key={opt.id}
                         onClick={() => setView(opt.id)}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors text-start focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+                          padding: '14px 16px', borderRadius: 12, border: '1.5px solid #f0f0f0',
+                          background: '#fff', cursor: 'pointer', textAlign: 'start',
+                          marginBottom: opt.id === 'question' ? 0 : 10,
+                          transition: 'all .15s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#c99a3c';
+                          e.currentTarget.style.background = '#fefcf7';
+                          e.currentTarget.style.transform = 'translateX(4px)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#f0f0f0';
+                          e.currentTarget.style.background = '#fff';
+                          e.currentTarget.style.transform = 'translateX(0)';
+                        }}
                       >
-                        <Icon className="w-5 h-5 text-blue-600 shrink-0" />
-                        <span className="text-sm font-medium text-gray-900">{opt.label}</span>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: 10,
+                          background: opt.iconBg,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          <Icon style={{ width: 20, height: 20, color: opt.iconColor }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 650, color: '#0f2942' }}>{opt.label}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{opt.desc}</div>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c99a3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
                       </button>
                     );
                   })}
@@ -143,21 +204,39 @@ export function FeedbackWidget() {
             ) : (
               /* Form View */
               <>
-                <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-3">
+                {/* Form header */}
+                <div style={{
+                  padding: '16px 20px',
+                  borderBottom: '1px solid #f0f0f0',
+                  display: 'flex', alignItems: 'center', gap: 12,
+                }}>
                   <button
                     onClick={goBack}
                     aria-label={t('feedback.back')}
-                    className="p-1 rounded-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{
+                      border: 'none', background: '#f3f4f6', cursor: 'pointer',
+                      padding: 6, borderRadius: 8, display: 'flex',
+                      transition: 'background .15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
                   >
-                    <ArrowLeft className="w-4 h-4 text-gray-700" />
+                    <ArrowLeft style={{ width: 16, height: 16, color: '#374151' }} />
                   </button>
-                  <h2 className="text-gray-900 font-semibold">{t('feedback.title')}</h2>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: viewConfig[view].iconBg,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    {(() => { const Icon = viewConfig[view].icon; return <Icon style={{ width: 16, height: 16, color: viewConfig[view].iconColor }} />; })()}
+                  </div>
+                  <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f2942' }}>{viewConfig[view].title}</h2>
                 </div>
-                <div className="p-6 space-y-4">
-                  <h3 className="text-gray-900 font-semibold">{viewTitle[view]}</h3>
 
-                  <div>
-                    <label htmlFor="feedback-email" className="block text-sm font-medium text-gray-700 mb-1">
+                {/* Form body */}
+                <div style={{ padding: '20px 20px 24px' }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <label htmlFor="feedback-email" style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
                       {t('feedback.emailLabel')}
                     </label>
                     <input
@@ -166,12 +245,19 @@ export function FeedbackWidget() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={t('feedback.emailPlaceholder')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      style={{
+                        width: '100%', padding: '10px 14px', border: '1.5px solid #e5e7eb',
+                        borderRadius: 10, fontSize: 13, color: '#0f2942',
+                        outline: 'none', transition: 'border-color .15s',
+                        boxSizing: 'border-box',
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = '#c99a3c'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                     />
                   </div>
 
-                  <div>
-                    <label htmlFor="feedback-message" className="block text-sm font-medium text-gray-700 mb-1">
+                  <div style={{ marginBottom: 16 }}>
+                    <label htmlFor="feedback-message" style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
                       {t('feedback.messageLabel')}
                     </label>
                     <textarea
@@ -180,14 +266,21 @@ export function FeedbackWidget() {
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder={t('feedback.messagePlaceholder')}
                       rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      style={{
+                        width: '100%', padding: '10px 14px', border: '1.5px solid #e5e7eb',
+                        borderRadius: 10, fontSize: 13, color: '#0f2942',
+                        outline: 'none', resize: 'none', transition: 'border-color .15s',
+                        boxSizing: 'border-box',
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = '#c99a3c'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                     />
                   </div>
 
                   {/* Attachment section — only for bug reports */}
                   {view === 'bug' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
                         {t('feedback.attachments')}
                       </label>
                       <input
@@ -199,15 +292,19 @@ export function FeedbackWidget() {
                         style={{ display: 'none' }}
                       />
                       {attachments.length > 0 ? (
-                        <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
-                          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '10px 14px', background: '#ecfdf5', border: '1.5px solid #a7f3d0',
+                          borderRadius: 10, fontSize: 13, color: '#059669',
+                        }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <polyline points="20 6 9 17 4 12" />
                           </svg>
-                          <span className="flex-1">{attachments.length} {attachments.length === 1 ? t('feedback.fileAttached') : t('feedback.filesAttached')}</span>
+                          <span style={{ flex: 1 }}>{attachments.length} {attachments.length === 1 ? t('feedback.fileAttached') : t('feedback.filesAttached')}</span>
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-medium shrink-0"
+                            style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: '#2563eb', fontWeight: 600, flexShrink: 0 }}
                           >
                             + {t('feedback.addMore')}
                           </button>
@@ -216,27 +313,39 @@ export function FeedbackWidget() {
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors w-full justify-center"
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                            width: '100%', padding: '10px 14px',
+                            border: '1.5px dashed #d1d5db', borderRadius: 10,
+                            background: '#fafafa', fontSize: 13, color: '#6b7280',
+                            cursor: 'pointer', transition: 'all .15s',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#c99a3c'; e.currentTarget.style.color = '#c99a3c'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.color = '#6b7280'; }}
                         >
-                          <Paperclip className="w-4 h-4" />
+                          <Paperclip style={{ width: 15, height: 15 }} />
                           {t('feedback.attachFile')}
                         </button>
                       )}
                       {attachments.length > 0 && (
-                        <div className="mt-2 space-y-1.5">
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {attachments.map((file, i) => {
                             const Icon = getFileIcon(file);
                             return (
-                              <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 bg-gray-50 rounded-md text-xs text-gray-700">
-                                <Icon className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                                <span className="truncate flex-1">{file.name}</span>
-                                <span className="text-gray-400 shrink-0">{formatFileSize(file.size)}</span>
+                              <div key={i} style={{
+                                display: 'flex', alignItems: 'center', gap: 8,
+                                padding: '6px 10px', background: '#f9fafb', borderRadius: 8,
+                                fontSize: 12, color: '#374151',
+                              }}>
+                                <Icon style={{ width: 14, height: 14, color: '#6b7280', flexShrink: 0 }} />
+                                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
+                                <span style={{ color: '#9ca3af', flexShrink: 0 }}>{formatFileSize(file.size)}</span>
                                 <button
                                   onClick={() => removeAttachment(i)}
-                                  className="p-0.5 hover:bg-gray-200 rounded transition-colors shrink-0"
+                                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 2, display: 'flex', borderRadius: 4 }}
                                   aria-label={t('feedback.removeFile')}
                                 >
-                                  <X className="w-3 h-3 text-gray-500" />
+                                  <X style={{ width: 12, height: 12, color: '#9ca3af' }} />
                                 </button>
                               </div>
                             );
@@ -246,11 +355,22 @@ export function FeedbackWidget() {
                     </div>
                   )}
 
+                  {/* Submit button */}
                   <button
                     onClick={handleSubmit}
                     disabled={!email || !message}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    style={{
+                      width: '100%', padding: '12px 20px', border: 'none', borderRadius: 10,
+                      background: (!email || !message) ? '#e5e7eb' : 'linear-gradient(135deg, #0f2942 0%, #173d61 100%)',
+                      color: (!email || !message) ? '#9ca3af' : '#fff',
+                      fontSize: 14, fontWeight: 700, cursor: (!email || !message) ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      transition: 'all .15s',
+                    }}
+                    onMouseEnter={(e) => { if (email && message) e.currentTarget.style.opacity = '0.9'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
                   >
+                    <Send style={{ width: 15, height: 15 }} />
                     {t('feedback.send')}
                   </button>
                 </div>

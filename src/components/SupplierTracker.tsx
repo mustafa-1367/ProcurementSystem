@@ -214,41 +214,34 @@ export function SupplierTracker({
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <FileText className="w-8 h-8 opacity-100" />
-            <TrendingUp className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100 text-sm">{t('supplier.myBids')}</p>
-          <p className="text-3xl font-bold mt-1">{myBids.length}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <Banknote className="w-8 h-8 opacity-100" />
-            <CheckCircle className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100 text-sm">{t('supplier.myContracts')}</p>
-          <p className="text-3xl font-bold mt-1">{myContracts.length}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <Gavel className="w-8 h-8 opacity-100" />
-            <AlertCircle className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100 text-sm">{t('supplier.myObjections')}</p>
-          <p className="text-3xl font-bold mt-1">{myDisputes.length}</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-2">
-            <Shield className="w-8 h-8 opacity-100" />
-            <Eye className="w-6 h-6 opacity-100" />
-          </div>
-          <p className="opacity-100 text-sm">{t('supplier.auditRecords')}</p>
-          <p className="text-3xl font-bold mt-1">{myAuditRecords.length}</p>
-        </div>
+        {[
+          { icon: FileText, label: t('supplier.myBids'), value: myBids.length, desc: t('supplier.bidsDesc'), bg: '#eff6ff', color: '#2563eb' },
+          { icon: Banknote, label: t('supplier.myContracts'), value: myContracts.length, desc: t('supplier.contractsDesc'), bg: '#ecfdf5', color: '#059669' },
+          { icon: Gavel, label: t('supplier.myObjections'), value: myDisputes.length, desc: t('supplier.objectionsDesc'), bg: '#fff7ed', color: '#d97706' },
+          { icon: Shield, label: t('supplier.auditRecords'), value: myAuditRecords.length, desc: t('supplier.auditDesc'), bg: '#faf5ff', color: '#7c3aed' },
+        ].map((card, idx) => {
+          const Icon = card.icon;
+          return (
+            <div key={idx} style={{
+              background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb',
+              padding: '20px 18px', boxShadow: '0 1px 3px rgba(0,0,0,.06)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 10, background: card.bg,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <Icon style={{ width: 22, height: 22, color: card.color }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#6b7280', margin: 0 }}>{card.label}</p>
+                  <p style={{ fontSize: 28, fontWeight: 800, color: '#0f2942', margin: '2px 0 0', lineHeight: 1.1 }}>{card.value}</p>
+                </div>
+              </div>
+              <p style={{ fontSize: 12, color: '#9ca3af', margin: '10px 0 0', lineHeight: 1.4 }}>{card.desc}</p>
+            </div>
+          );
+        })}
       </div>
 
       {/* Empty state when no filter entered */}

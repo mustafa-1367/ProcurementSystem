@@ -14,7 +14,7 @@ import { SubmitBid } from './components/SubmitBid';
 import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale } from 'lucide-react';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock } from 'lucide-react';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
@@ -111,8 +111,143 @@ function AppContent() {
   const tablistRef = useRef<HTMLDivElement>(null);
   const langBtnRef = useRef<HTMLButtonElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
+  const FONT_SIZES = [14, 16, 18, 20];
+  const [fontSizeIdx, setFontSizeIdx] = useState(1); // default 16px
 
-  const { connected, account, procurementContract, isCorrectNetwork } = useWeb3();
+  const [showAccessibility, setShowAccessibility] = useState(false);
+  const [highContrast, setHighContrast] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${FONT_SIZES[fontSizeIdx]}px`;
+  }, [fontSizeIdx]);
+
+  useEffect(() => {
+    if (highContrast) {
+      document.documentElement.classList.add('high-contrast');
+    } else {
+      document.documentElement.classList.remove('high-contrast');
+    }
+  }, [highContrast]);
+
+  // Ctrl+K / Cmd+K to focus search bar
+  useEffect(() => {
+    const handleSearchShortcut = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleSearchShortcut);
+    return () => document.removeEventListener('keydown', handleSearchShortcut);
+  }, []);
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    if (!searchFocused) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [searchFocused]);
+
+  const getSearchResults = () => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q || q.length < 2) return [];
+    const results: { type: string; title: string; subtitle: string; tab: string; icon: any }[] = [];
+
+    tenders.forEach((tender: any) => {
+      if (
+        tender.title?.toLowerCase().includes(q) ||
+        tender.department?.toLowerCase().includes(q) ||
+        tender.id?.toLowerCase().includes(q) ||
+        tender.category?.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: t('search.tender'),
+          title: tender.title || tender.id,
+          subtitle: `${tender.department || ''} • ${tender.status || ''}`,
+          tab: 'pre',
+          icon: FileText,
+        });
+      }
+    });
+
+    bids.forEach((bid: any) => {
+      if (
+        bid.vendorName?.toLowerCase().includes(q) ||
+        bid.tenderId?.toLowerCase().includes(q) ||
+        bid.vendorEmail?.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: t('search.bid'),
+          title: bid.vendorName || bid.tenderId,
+          subtitle: `${bid.tenderId || ''} • ${bid.amount ? `${Number(bid.amount).toLocaleString()} AFN` : ''}`,
+          tab: 'tender',
+          icon: Send,
+        });
+      }
+    });
+
+    contracts.forEach((contract: any) => {
+      if (
+        contract.vendorName?.toLowerCase().includes(q) ||
+        contract.title?.toLowerCase().includes(q) ||
+        contract.id?.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: t('search.contract'),
+          title: contract.title || contract.vendorName || contract.id,
+          subtitle: `${contract.vendorName || ''} • ${contract.status || ''}`,
+          tab: 'post',
+          icon: Briefcase,
+        });
+      }
+    });
+
+    reports.forEach((report: any) => {
+      if (
+        report.title?.toLowerCase().includes(q) ||
+        report.description?.toLowerCase().includes(q) ||
+        report.category?.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: t('search.report'),
+          title: report.title || report.category,
+          subtitle: `${report.category || ''} • ${report.status || ''}`,
+          tab: 'whistleblower',
+          icon: AlertTriangle,
+        });
+      }
+    });
+
+    registeredSuppliers.forEach((supplier: any) => {
+      if (
+        supplier.companyName?.toLowerCase().includes(q) ||
+        supplier.email?.toLowerCase().includes(q) ||
+        supplier.licenseNumber?.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: t('search.supplier'),
+          title: supplier.companyName || supplier.email,
+          subtitle: `${supplier.email || ''} • ${supplier.licenseNumber || ''}`,
+          tab: 'supplier',
+          icon: Truck,
+        });
+      }
+    });
+
+    return results.slice(0, 10);
+  };
+
+  const { connected, account, procurementContract, isCorrectNetwork, connect } = useWeb3();
 
   // Fetch role from smart contract when wallet connects
   useEffect(() => {
@@ -269,32 +404,47 @@ function AppContent() {
           {/* Right: Role switcher + utilities */}
           <div className="header-controls flex items-center" style={{ gap: 10 }}>
             <nav aria-label={t('role.switchRole')} className="role-switch flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
-              {ALL_ROLES.map((role) => (
-                <button
-                  key={role}
-                  onClick={() => { setUserRole(role); setActivePhase(roleFirstTab[role]); }}
-                  style={{
-                    border: 'none',
-                    background: userRole === role ? '#c99a3c' : 'transparent',
-                    color: userRole === role ? '#0f2942' : '#dbe4ee',
-                    padding: '8px 14px',
-                    borderRadius: 999,
-                    fontSize: '12.5px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap' as const,
-                    transition: '.15s',
-                  }}
-                  className="focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                  onMouseEnter={(e) => { if (userRole !== role) (e.target as HTMLElement).style.background = 'rgba(255,255,255,.10)'; }}
-                  onMouseLeave={(e) => { if (userRole !== role) (e.target as HTMLElement).style.background = 'transparent'; }}
-                >
-                  {t(`role.${role}`)}
-                  {onChainRole === role && (
-                    <span style={{ marginLeft: 4, fontSize: '9px', verticalAlign: 'super', color: userRole === role ? '#065f46' : '#6ee7b7' }}>●</span>
-                  )}
-                </button>
-              ))}
+              {ALL_ROLES.map((role) => {
+                // When wallet connected & on-chain role exists: lock to that role
+                const isLockedToOnChain = connected && onChainRole !== null;
+                const isDisabled = isLockedToOnChain && role !== onChainRole;
+                return (
+                  <button
+                    key={role}
+                    onClick={() => {
+                      if (isDisabled) return;
+                      setUserRole(role);
+                      setActivePhase(roleFirstTab[role]);
+                    }}
+                    title={isDisabled ? t('role.roleLocked') : undefined}
+                    style={{
+                      border: 'none',
+                      background: userRole === role ? '#c99a3c' : 'transparent',
+                      color: userRole === role ? '#0f2942' : '#dbe4ee',
+                      padding: '8px 14px',
+                      borderRadius: 999,
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: isDisabled ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap' as const,
+                      transition: '.15s',
+                      opacity: isDisabled ? 0.35 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                    className="focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
+                    onMouseEnter={(e) => { if (userRole !== role && !isDisabled) (e.target as HTMLElement).style.background = 'rgba(255,255,255,.10)'; }}
+                    onMouseLeave={(e) => { if (userRole !== role) (e.target as HTMLElement).style.background = 'transparent'; }}
+                  >
+                    {isDisabled && <Lock style={{ width: 11, height: 11, opacity: 0.7 }} />}
+                    {t(`role.${role}`)}
+                    {onChainRole === role && (
+                      <span style={{ marginLeft: 2, fontSize: '9px', verticalAlign: 'super', color: userRole === role ? '#065f46' : '#6ee7b7' }}>●</span>
+                    )}
+                  </button>
+                );
+              })}
             </nav>
 
             {/* Language Switcher */}
@@ -344,6 +494,19 @@ function AppContent() {
               )}
             </div>
 
+            {/* Accessibility */}
+            <button
+              onClick={() => setShowAccessibility(true)}
+              className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+              style={{ color: '#c7d3e0', padding: '6px 8px', fontSize: '12.5px' }}
+              aria-label={t('a11y.title')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 1.5c4.69 0 8.5 3.81 8.5 8.5s-3.81 8.5-8.5 8.5S3.5 16.69 3.5 12 7.31 3.5 12 3.5zM12 6a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-4.5 4.25c-.41 0-.75.34-.75.75s.34.75.75.75h2.75v2.75l-1.5 3.25c-.17.38 0 .83.38 1 .38.17.83 0 1-.38L12 14.88l1.88 3.25c.17.38.62.55 1 .38.38-.17.55-.62.38-1l-1.5-3.25v-2.75h2.75c.41 0 .75-.34.75-.75s-.34-.75-.75-.75h-9z"/>
+              </svg>
+              <span>{t('a11y.title')}</span>
+            </button>
+
             {/* Help */}
             <button
               onClick={() => { setActivePhase('help'); setShowLangMenu(false); }}
@@ -364,43 +527,141 @@ function AppContent() {
       {/* ── Tab Strip (Light, sticky below navy bar) ── */}
       <div className="tab-strip-container sticky z-[60]" style={{ top: 64, background: '#fcfcfb', borderBottom: '1px solid rgba(11,11,11,0.10)' }}>
         <div className="max-w-7xl mx-auto" style={{ padding: '0 22px' }}>
-          <div
-            ref={tablistRef}
-            role="tablist"
-            aria-label={t('nav.tablistLabel')}
-            className="tab-strip-scroll flex overflow-x-auto" style={{ gap: 2 }}
-          >
-            {visibleTabs.map((tab, index) => {
-              const isActive = activePhase === tab.id;
-              const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  role="tab"
-                  aria-selected={isActive}
-                  tabIndex={isActive ? 0 : -1}
-                  onClick={() => { setActivePhase(tab.id); }}
-                  onKeyDown={(e) => handleTabKeyDown(e, index)}
-                  className="focus:outline-none"
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+            <div
+              ref={tablistRef}
+              role="tablist"
+              aria-label={t('nav.tablistLabel')}
+              className="tab-strip-scroll flex overflow-x-auto" style={{ gap: 2, flex: 1 }}
+            >
+              {visibleTabs.map((tab, index) => {
+                const isActive = activePhase === tab.id;
+                const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={isActive}
+                    tabIndex={isActive ? 0 : -1}
+                    onClick={() => { setActivePhase(tab.id); }}
+                    onKeyDown={(e) => handleTabKeyDown(e, index)}
+                    className="focus:outline-none"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      padding: '13px 14px',
+                      fontSize: '13.5px',
+                      fontWeight: 600,
+                      color: isActive ? '#0f2942' : '#52514e',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap' as const,
+                      borderBottom: `3px solid ${isActive ? '#c99a3c' : 'transparent'}`,
+                      transition: '.15s',
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) { (e.target as HTMLElement).style.color = '#0b0b0b'; (e.target as HTMLElement).style.background = '#f6f5f2'; } }}
+                    onMouseLeave={(e) => { if (!isActive) { (e.target as HTMLElement).style.color = '#52514e'; (e.target as HTMLElement).style.background = 'transparent'; } }}
+                  >
+                    {t(`nav.${navKey}`)}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search — right end of tab strip */}
+            <div ref={searchContainerRef} style={{ position: 'relative', flexShrink: 0, marginLeft: 8 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: searchFocused ? '#fff' : '#f3f4f6',
+                border: `1.5px solid ${searchFocused ? '#c99a3c' : 'transparent'}`,
+                borderRadius: 8, padding: '5px 10px',
+                boxShadow: searchFocused ? '0 0 0 3px rgba(201, 154, 60, 0.10)' : 'none',
+                transition: 'all .15s',
+                width: searchFocused ? 280 : 180,
+              }}>
+                <Search style={{ width: 15, height: 15, color: '#9ca3af', flexShrink: 0 }} />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setSearchFocused(false); searchInputRef.current?.blur(); setSearchQuery(''); } }}
+                  placeholder={t('search.title')}
+                  aria-label={t('search.title')}
                   style={{
-                    border: 'none',
-                    background: 'transparent',
-                    padding: '13px 14px',
-                    fontSize: '13.5px',
-                    fontWeight: 600,
-                    color: isActive ? '#0f2942' : '#52514e',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap' as const,
-                    borderBottom: `3px solid ${isActive ? '#c99a3c' : 'transparent'}`,
-                    transition: '.15s',
+                    flex: 1, border: 'none', outline: 'none', fontSize: '12.5px',
+                    color: '#0f2942', background: 'transparent', minWidth: 0,
                   }}
-                  onMouseEnter={(e) => { if (!isActive) { (e.target as HTMLElement).style.color = '#0b0b0b'; (e.target as HTMLElement).style.background = '#f6f5f2'; } }}
-                  onMouseLeave={(e) => { if (!isActive) { (e.target as HTMLElement).style.color = '#52514e'; (e.target as HTMLElement).style.background = 'transparent'; } }}
-                >
-                  {t(`nav.${navKey}`)}
-                </button>
-              );
-            })}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex' }}
+                    aria-label="Clear search"
+                  >
+                    <X style={{ width: 14, height: 14, color: '#9ca3af' }} />
+                  </button>
+                )}
+              </div>
+
+              {/* Search Results Dropdown */}
+              {searchFocused && searchQuery.length >= 2 && (
+                <div style={{
+                  position: 'absolute', top: '100%', right: 0, width: 400, marginTop: 6,
+                  background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb',
+                  boxShadow: '0 8px 24px rgba(0,0,0,.12)', zIndex: 200,
+                  maxHeight: 360, overflowY: 'auto',
+                }}>
+                  {getSearchResults().length === 0 ? (
+                    <div style={{ padding: '24px 18px', textAlign: 'center' }}>
+                      <Search style={{ width: 28, height: 28, color: '#d1d5db', margin: '0 auto 8px' }} />
+                      <p style={{ color: '#6b7280', fontSize: '13px', margin: '0 0 2px', fontWeight: 600 }}>{t('search.noResults')}</p>
+                      <p style={{ color: '#9ca3af', fontSize: '12px', margin: 0 }}>{t('search.tryDifferent')}</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ padding: '8px 14px 4px', fontSize: '11px', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {getSearchResults().length} {t('search.resultsFound')}
+                      </div>
+                      {getSearchResults().map((result, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setActivePhase(result.tab);
+                            setSearchFocused(false);
+                            setSearchQuery('');
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                            padding: '9px 14px', border: 'none', background: 'transparent',
+                            cursor: 'pointer', textAlign: 'start',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 8, background: '#f3f4f6',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          }}>
+                            <result.icon style={{ width: 15, height: 15, color: '#6b7280' }} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f2942', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.title}</div>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.subtitle}</div>
+                          </div>
+                          <span style={{
+                            fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: 999,
+                            background: '#eff6ff', color: '#1d4ed8', flexShrink: 0,
+                          }}>{result.type}</span>
+                          <ArrowRight style={{ width: 14, height: 14, color: '#d1d5db', flexShrink: 0 }} />
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
@@ -508,6 +769,7 @@ function AppContent() {
             setDisputes={setDisputes}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
+            userRole={userRole}
           />
         )}
         {activePhase === 'reputation' && (
@@ -596,6 +858,150 @@ function AppContent() {
             <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af' }}>{t('role.privilegedNote')}</p>
           </div>
         </div>
+      )}
+
+      {/* Accessibility Panel — slide-in from top right */}
+      {showAccessibility && createPortal(
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAccessibility(false); }}
+        >
+          <div style={{
+            position: 'absolute', top: 0, right: 0,
+            background: highContrast ? '#000' : '#fff',
+            width: 420, maxWidth: '100vw',
+            maxHeight: '100vh', overflowY: 'auto',
+            boxShadow: '-4px 0 24px rgba(0,0,0,.15)',
+            borderLeft: highContrast ? '2px solid #ffd700' : '1px solid #e5e7eb',
+          }}>
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '20px 24px 0',
+            }}>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: highContrast ? '#ffd700' : '#0f2942' }}>
+                {t('a11y.title')}
+              </h2>
+              <button
+                onClick={() => setShowAccessibility(false)}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4 }}
+                aria-label="Close"
+              >
+                <X style={{ width: 22, height: 22, color: highContrast ? '#ffd700' : '#6b7280' }} />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 24px 24px' }}>
+              {/* Intro */}
+              <p style={{ fontSize: 14, color: highContrast ? '#fff' : '#374151', lineHeight: 1.6, marginTop: 0, marginBottom: 4 }}>
+                {t('a11y.intro')}
+              </p>
+              <p style={{ fontSize: 13, color: highContrast ? '#ccc' : '#6b7280', lineHeight: 1.6, marginTop: 0 }}>
+                {t('a11y.moreGuides')}{' '}
+                <a
+                  href="https://mcmw.abilitynet.org.uk/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: highContrast ? '#00bfff' : '#1d4ed8', textDecoration: 'underline', fontWeight: 600 }}
+                >
+                  mcmw.abilitynet.org.uk
+                </a>
+              </p>
+
+              {/* Text Size Section */}
+              <h3 style={{ fontSize: 17, fontWeight: 600, color: highContrast ? '#ffd700' : '#1d4ed8', marginBottom: 12, marginTop: 20 }}>
+                {t('a11y.textSize')}
+              </h3>
+              <p style={{ fontSize: 13, color: highContrast ? '#ccc' : '#6b7280', lineHeight: 1.6, marginTop: 0, marginBottom: 12 }}>
+                {t('a11y.textSizeDesc')}
+              </p>
+
+              {/* Contrast Section */}
+              <h3 style={{ fontSize: 17, fontWeight: 600, color: highContrast ? '#ffd700' : '#1d4ed8', marginBottom: 12, marginTop: 24 }}>
+                {t('a11y.contrast')}
+              </h3>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setHighContrast(false)}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
+                    border: !highContrast ? '2px solid #059669' : '1.5px solid #d1d5db',
+                    background: !highContrast ? '#ecfdf5' : (highContrast ? '#111' : '#fff'),
+                  }}
+                >
+                  <div style={{
+                    width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${!highContrast ? '#059669' : '#d1d5db'}`,
+                    background: !highContrast ? '#059669' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {!highContrast && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: highContrast ? '#ffd700' : '#0f2942' }}>{t('a11y.defaultSettings')}</span>
+                </button>
+                <button
+                  onClick={() => setHighContrast(true)}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
+                    border: highContrast ? '2px solid #ffd700' : '1.5px solid #d1d5db',
+                    background: '#111',
+                  }}
+                >
+                  <div style={{
+                    width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${highContrast ? '#ffd700' : '#555'}`,
+                    background: highContrast ? '#ffd700' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {highContrast && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#ffd700' }}>{t('a11y.highContrast')}</span>
+                </button>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                <button
+                  onClick={() => { setFontSizeIdx(1); setHighContrast(false); }}
+                  style={{
+                    flex: 1, padding: '11px 20px', borderRadius: 8,
+                    border: '1.5px solid #1d4ed8', background: 'transparent',
+                    color: highContrast ? '#ffd700' : '#1d4ed8',
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    textTransform: 'uppercase', letterSpacing: '0.03em',
+                  }}
+                >
+                  {t('a11y.resetDefault')}
+                </button>
+                <button
+                  onClick={() => setShowAccessibility(false)}
+                  style={{
+                    flex: 1, padding: '11px 20px', borderRadius: 8,
+                    border: 'none', background: '#1d4ed8',
+                    color: '#fff',
+                    fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    textTransform: 'uppercase', letterSpacing: '0.03em',
+                  }}
+                >
+                  {t('a11y.confirmChoice')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       <FeedbackWidget />

@@ -1564,3 +1564,95 @@ html {
     opacity: .5;
   }
 }
+
+/* High Contrast Mode — overrides all inline styles */
+.high-contrast {
+  background: #000 !important;
+}
+
+.high-contrast *:not(svg):not(svg *) {
+  background-color: #000 !important;
+  background-image: none !important;
+  color: #ffd700 !important;
+  border-color: #ffd700 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.high-contrast h1, .high-contrast h2, .high-contrast h3,
+.high-contrast h4, .high-contrast h5, .high-contrast h6 {
+  color: #ffd700 !important;
+}
+
+.high-contrast p, .high-contrast span, .high-contrast div,
+.high-contrast li, .high-contrast td, .high-contrast th,
+.high-contrast label, .high-contrast small, .high-contrast strong,
+.high-contrast em, .high-contrast b, .high-contrast i {
+  color: #ffd700 !important;
+}
+
+.high-contrast a {
+  color: #00bfff !important;
+  text-decoration: underline !important;
+}
+
+.high-contrast button {
+  background-color: #111 !important;
+  color: #ffd700 !important;
+  border: 1px solid #ffd700 !important;
+}
+
+.high-contrast button:hover {
+  background-color: #222 !important;
+}
+
+.high-contrast input, .high-contrast textarea, .high-contrast select {
+  background-color: #111 !important;
+  color: #ffd700 !important;
+  border: 1px solid #ffd700 !important;
+}
+
+.high-contrast input::placeholder {
+  color: #999 !important;
+}
+
+.high-contrast header {
+  background: #0a0a0a !important;
+  border-bottom: 2px solid #ffd700 !important;
+}
+
+.high-contrast header * {
+  color: #ffd700 !important;
+}
+
+.high-contrast .tab-strip-container {
+  background: #0a0a0a !important;
+  border-bottom: 2px solid #ffd700 !important;
+}
+
+.high-contrast kbd {
+  background-color: #222 !important;
+  border-color: #ffd700 !important;
+  color: #ffd700 !important;
+}
+
+.high-contrast svg {
+  color: #ffd700 !important;
+}
+
+.high-contrast svg circle, .high-contrast svg line,
+.high-contrast svg path, .high-contrast svg rect,
+.high-contrast svg polygon, .high-contrast svg polyline {
+  stroke: #ffd700 !important;
+  fill: none !important;
+}
+
+.high-contrast svg[fill="currentColor"] path,
+.high-contrast svg path[fill="currentColor"] {
+  fill: #ffd700 !important;
+  stroke: none !important;
+}
+
+.high-contrast img {
+  filter: grayscale(100%) contrast(1.5) !important;
+}

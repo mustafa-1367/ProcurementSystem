@@ -50,7 +50,8 @@ export function DAOGovernance({
     sourceReportId: '',
   });
   const { t } = useTranslation();
-  const { connected, isCorrectNetwork, connect } = useWeb3();
+  const { connected, isCorrectNetwork, connect, account } = useWeb3();
+  const QUORUM_THRESHOLD = 5;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -138,8 +139,10 @@ export function DAOGovernance({
   };
 
   const castVote = async (disputeId: string, vote: 'approve' | 'reject') => {
-    // Record user's vote
-    setUserVotes({ ...userVotes, [disputeId]: vote });
+    // Prevent double voting: key by wallet address + dispute ID
+    const voteKey = account ? `${account}-${disputeId}` : disputeId;
+    if (userVotes[voteKey]) return; // Already voted
+    setUserVotes({ ...userVotes, [voteKey]: vote });
 
     const dispute = disputes.find((d) => d.id === disputeId);
     if (!dispute) return;
@@ -153,8 +156,8 @@ export function DAOGovernance({
     let status = dispute.status;
     let resolution = dispute.resolution;
 
-    // Auto-resolve if threshold reached (e.g., 10 votes)
-    if (newVotes.totalVoters >= 10) {
+    // Auto-resolve only if quorum is met
+    if (newVotes.totalVoters >= QUORUM_THRESHOLD) {
       const approvalRate = (newVotes.approve / newVotes.totalVoters) * 100;
       status = 'resolved';
       resolution = {
@@ -806,7 +809,8 @@ export function DAOGovernance({
               const daysRemaining = Math.ceil(
                 (new Date(dispute.votingDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
               );
-              const hasVoted = userVotes[dispute.id];
+              const voteKey = account ? `${account}-${dispute.id}` : dispute.id;
+              const hasVoted = userVotes[voteKey];
               const approvalRate = dispute.votes.totalVoters > 0 
                 ? ((dispute.votes.approve / dispute.votes.totalVoters) * 100).toFixed(1)
                 : 0;
@@ -856,7 +860,7 @@ export function DAOGovernance({
                         )}
                       </div>
 
-                      <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div className="grid grid-cols-4 gap-4 mb-4">
                         <div>
                           <p className="text-gray-500">{t('dao.totalVotes')}</p>
                           <p className="text-gray-900">{dispute.votes.totalVoters}</p>
@@ -866,10 +870,24 @@ export function DAOGovernance({
                           <p className="text-gray-900">{approvalRate}%</p>
                         </div>
                         <div>
+                          <p className="text-gray-500">{t('dao.quorum')}</p>
+                          <p className={dispute.votes.totalVoters >= QUORUM_THRESHOLD ? 'text-green-700' : 'text-amber-600'}>
+                            {dispute.votes.totalVoters}/{QUORUM_THRESHOLD} {t('dao.quorumRequired')}
+                          </p>
+                        </div>
+                        <div>
                           <p className="text-gray-500">{t('dao.timeRemaining')}</p>
                           <p className="text-gray-900">{daysRemaining} {t('dao.days')}</p>
                         </div>
                       </div>
+
+                      {/* Quorum warning */}
+                      {dispute.votes.totalVoters < QUORUM_THRESHOLD && (
+                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4 text-sm text-amber-800">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          {t('dao.quorumNotMet')}
+                        </div>
+                      )}
 
                       {/* Voting Progress */}
                       <div className="space-y-2 mb-4">
