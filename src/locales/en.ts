@@ -9,7 +9,7 @@ export const en = {
     fontSize: 'Font Size',
     fontDecrease: 'Decrease font size',
     fontIncrease: 'Increase font size',
-    simulationBanner: 'Simulation Mode — Connect MetaMask wallet to record transactions on Sepolia testnet',
+    simulationBanner: 'Simulation Mode — Roles are freely switchable for demo. Connect MetaMask wallet to authenticate your role and record transactions on Sepolia testnet.',
   },
   a11y: {
     title: 'Accessibility',
