@@ -205,9 +205,53 @@ async function onChainWhistleblower(
   procContract: Contract,
   data: Record<string, unknown>
 ): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
-  const zkProofHash = data.zkProof as string || '0x' + '0'.repeat(64);
   const category = String(data.category || '');
   const severity = String(data.severity || '');
+  const proofData = data.proofData as any;
+
+  // If full ZKP proof data is available, use WhistleblowerVerifier for on-chain Groth16 verification
+  const web3 = getWeb3State();
+  if (proofData?.pA && proofData?.pB && proofData?.pC && web3.whistleblowerVerifierContract) {
+    const verifier = web3.whistleblowerVerifierContract;
+
+    // Step 1: Register the commitment on-chain (anyone can call this)
+    const commitment = data.commitment as string;
+    if (commitment) {
+      try {
+        const regTx = await verifier.registerCommitment(BigInt(commitment));
+        await regTx.wait();
+        console.log('[ZKP] Commitment registered on-chain');
+      } catch (err: any) {
+        // "Commitment already registered" is fine — means user registered before
+        console.warn('[ZKP] Commitment registration skipped:', err.reason || err.message);
+      }
+    }
+
+    // Step 2: Submit proof for on-chain Groth16 verification
+    // The contract updates the merkle root atomically — no separate owner call needed
+    const merkleRoot = proofData.merkleRoot as string;
+    const pA = proofData.pA.map((x: string) => BigInt(x));
+    const pB = proofData.pB.map((row: string[]) => row.map((x: string) => BigInt(x)));
+    const pC = proofData.pC.map((x: string) => BigInt(x));
+    const merkleRootUint = BigInt(merkleRoot);
+    const nullifierHashUint = BigInt(proofData.nullifierHash as string);
+
+    console.log('[ZKP] Submitting proof for on-chain Groth16 verification...');
+    const tx = await verifier.submitVerifiedReport(
+      pA, pB, pC,
+      merkleRootUint,
+      nullifierHashUint,
+      category,
+      severity
+    );
+    const receipt = await tx.wait();
+    console.log('[ZKP] On-chain Groth16 verification PASSED — report submitted');
+    return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+  }
+
+  // Fallback: no proof data or no verifier contract — use ProcurementSystem hash-only method
+  const zkProofRaw = data.zkProof as string || '';
+  const zkProofHash = zkProofRaw.startsWith('0x') ? zkProofRaw : keccak256(zkProofRaw);
   const tx = await procContract.submitWhistleblowerReport(zkProofHash, category, severity);
   const receipt = await tx.wait();
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };

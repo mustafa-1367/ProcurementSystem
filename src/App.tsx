@@ -53,11 +53,11 @@ const allTabs = [
 ];
 
 const roleTabs: Record<UserRole, string[]> = {
-  government: ['dashboard', 'pre', 'tender', 'post'],
-  supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'audit', 'reputation', 'whistleblower'],
-  citizen:    ['dashboard', 'audit', 'reputation', 'dao', 'whistleblower'],
-  auditor:    ['dashboard', 'audit', 'reputation', 'supplier'],
-  oversight:  ['dashboard', 'dao', 'whistleblower', 'audit', 'reputation', 'supplier'],
+  government: ['dashboard', 'pre', 'tender', 'post', 'dao', 'audit', 'reputation'],
+  supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'reputation', 'audit', 'whistleblower'],
+  citizen:    ['dashboard', 'audit', 'whistleblower', 'dao', 'reputation'],
+  auditor:    ['dashboard', 'audit', 'supplier', 'reputation', 'whistleblower', 'dao'],
+  oversight:  ['dashboard', 'audit', 'supplier', 'whistleblower', 'dao', 'reputation'],
 };
 
 const roleFirstTab: Record<UserRole, string> = {
@@ -422,7 +422,7 @@ function AppContent() {
                       border: 'none',
                       background: userRole === role ? '#c99a3c' : 'transparent',
                       color: userRole === role ? '#0f2942' : '#dbe4ee',
-                      padding: '6px 10px',
+                      padding: connected ? '5px 7px' : '6px 10px',
                       borderRadius: 999,
                       fontSize: '11.5px',
                       fontWeight: 600,
@@ -455,8 +455,10 @@ function AppContent() {
                 onClick={() => setShowLangMenu(!showLangMenu)}
                 aria-expanded={showLangMenu}
                 aria-haspopup="true"
-                className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-                style={{ color: '#c7d3e0', padding: '5px 5px', fontSize: '12px' }}
+                className="flex items-center gap-1.5 rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-white"
+                style={{ color: showLangMenu ? '#fff' : '#c7d3e0', padding: '5px 8px', fontSize: '12px', fontWeight: 600, background: showLangMenu ? 'rgba(255,255,255,.15)' : 'rgba(255,255,255,.06)', borderRadius: 6 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.15)'; e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={(e) => { if (!showLangMenu) { e.currentTarget.style.background = 'rgba(255,255,255,.06)'; e.currentTarget.style.color = '#c7d3e0'; } }}
               >
                 <Globe className="w-4 h-4" />
                 <span>{t(`lang.${language}`)}</span>
@@ -498,9 +500,11 @@ function AppContent() {
             {/* Accessibility */}
             <button
               onClick={() => setShowAccessibility(true)}
-              className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-              style={{ color: '#c7d3e0', padding: '5px 5px', fontSize: '12px' }}
+              className="flex items-center gap-1.5 rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-white"
+              style={{ color: '#c7d3e0', padding: '5px 8px', fontSize: '12px', fontWeight: 600, background: 'rgba(255,255,255,.06)', borderRadius: 6 }}
               aria-label={t('a11y.title')}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.15)'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.06)'; e.currentTarget.style.color = '#c7d3e0'; }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 1.5c4.69 0 8.5 3.81 8.5 8.5s-3.81 8.5-8.5 8.5S3.5 16.69 3.5 12 7.31 3.5 12 3.5zM12 6a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-4.5 4.25c-.41 0-.75.34-.75.75s.34.75.75.75h2.75v2.75l-1.5 3.25c-.17.38 0 .83.38 1 .38.17.83 0 1-.38L12 14.88l1.88 3.25c.17.38.62.55 1 .38.38-.17.55-.62.38-1l-1.5-3.25v-2.75h2.75c.41 0 .75-.34.75-.75s-.34-.75-.75-.75h-9z"/>
@@ -511,8 +515,10 @@ function AppContent() {
             {/* Help */}
             <button
               onClick={() => { setActivePhase('help'); setShowLangMenu(false); }}
-              className="flex items-center gap-1.5 hover:text-white rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-              style={{ color: activePhase === 'help' ? '#ffffff' : '#c7d3e0', padding: '5px 5px', fontSize: '12px' }}
+              className="flex items-center gap-1.5 rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-white"
+              style={{ color: activePhase === 'help' ? '#fff' : '#c7d3e0', padding: '5px 8px', fontSize: '12px', fontWeight: 600, background: activePhase === 'help' ? 'rgba(255,255,255,.15)' : 'rgba(255,255,255,.06)', borderRadius: 6 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,.15)'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={(e) => { if (activePhase !== 'help') { e.currentTarget.style.background = 'rgba(255,255,255,.06)'; e.currentTarget.style.color = '#c7d3e0'; } }}
             >
               <HelpCircle className="w-4 h-4" />
               <span>{t('nav.help')}</span>

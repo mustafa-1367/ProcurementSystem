@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { AlertTriangle, Shield, Eye, EyeOff, Lock, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins } from 'lucide-react';
+import { AlertTriangle, Shield, Eye, EyeOff, Lock, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2 } from 'lucide-react';
 import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
+import { generateProof, generateUserSecret, computeCommitment, formatProofForContract } from '../utils/zkProof';
+import * as snarkjs from 'snarkjs';
 
 interface WhistleblowerPortalProps {
   reports: any[];
@@ -89,19 +91,56 @@ export function WhistleblowerPortal({
     setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
   };
 
-  const generateZKProof = () => {
-    // ⚠️ SIMULATED — Not a real Zero-Knowledge Proof. In production, this would use
-    // a ZKP library (e.g., snarkjs, circom) with proper cryptographic circuits.
-    const proof = `SIM-ZKP-${Math.random().toString(36).substr(2, 16).toUpperCase()}`;
-    setZkProof(proof);
-    return proof;
-  };
+  const [zkpGenerating, setZkpGenerating] = useState(false);
+  const [submitStep, setSubmitStep] = useState<string | null>(null); // progress step label
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<{ reportId: string; txHash: string; onChain: boolean; zkpVerified: boolean } | null>(null);
 
   const handleSubmitReport = async (e: React.FormEvent) => {
     e.preventDefault();
+    setZkpGenerating(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
 
-    const proof = generateZKProof();
-    
+    let proofHash: string;
+    let proofData: any = null;
+    let zkpReal = false;
+
+    try {
+      setSubmitStep(t('whistleblower.stepGeneratingProof'));
+
+      // Generate real ZKP using Circom/snarkjs
+      let secret = localStorage.getItem('wb_secret');
+      if (!secret) {
+        const newSecret = generateUserSecret();
+        localStorage.setItem('wb_secret', newSecret.toString());
+        secret = newSecret.toString();
+      }
+
+      const commitment = await computeCommitment(BigInt(secret));
+      const commitments = [commitment];
+      const result = await generateProof(BigInt(secret), commitments, 0);
+      const formatted = formatProofForContract(result.proof);
+
+      setSubmitStep(t('whistleblower.stepVerifyingProof'));
+
+      // Verify the proof client-side using the verification key
+      const basePath = import.meta.env.BASE_URL || '/';
+      const vkeyResponse = await fetch(`${basePath}zkp/verification_key.json`);
+      const vkey = await vkeyResponse.json();
+      const isValid = await snarkjs.groth16.verify(vkey, result.publicSignals, result.proof);
+      console.log('[ZKP] Groth16 proof generated and verified client-side:', isValid);
+
+      proofHash = `ZKP-${result.nullifierHash.substring(0, 16).toUpperCase()}`;
+      proofData = { ...formatted, merkleRoot: result.merkleRoot, nullifierHash: result.nullifierHash };
+      zkpReal = isValid;
+    } catch (err) {
+      console.warn('Real ZKP generation failed, using fallback:', err);
+      proofHash = `ZKP-FALLBACK-${Date.now().toString(16).toUpperCase()}`;
+    }
+
+    setZkProof(proofHash);
+
     const severityRewards: Record<string, number> = { low: 100, medium: 250, high: 500, critical: 1000 };
     const rewardAmount = severityRewards[reportForm.severity] || 100;
 
@@ -109,7 +148,8 @@ export function WhistleblowerPortal({
       id: `RPT-${Date.now()}`,
       ...reportForm,
       isAnonymous: anonymousMode,
-      zkProof: proof,
+      zkProof: proofHash,
+      zkpVerified: zkpReal,
       status: 'submitted',
       submittedAt: new Date().toISOString(),
       investigationStatus: 'pending',
@@ -121,45 +161,74 @@ export function WhistleblowerPortal({
       referrals: [] as { authority: string; referredAt: string; blockchainRecordId: string }[],
     };
 
-    // Add to blockchain with ZK proof
-    const { block, contract, onChain } = await addProcurementRecordAsync('whistleblower_report', {
-      reportId: newReport.id,
-      zkProof: proof,
-      category: reportForm.category,
-      severity: reportForm.severity,
-      anonymous: anonymousMode,
-    });
+    try {
+      setSubmitStep(t('whistleblower.stepSubmittingChain'));
 
-    const blockchainRecord = {
-      id: block.hash,
-      type: 'whistleblower_report',
-      reportId: newReport.id,
-      contractId: contract.id,
-      transactionHash: contract.transactionHash,
-      zkProof: proof,
-      timestamp: new Date().toISOString(),
-      verified: onChain,
-      simulated: !onChain,
-      onChain,
-    };
+      // Add to blockchain with ZK proof — pass full proof + commitment for on-chain Groth16 verification
+      let commitmentStr: string | undefined;
+      try {
+        const secret = localStorage.getItem('wb_secret');
+        if (secret && proofData) {
+          const cm = await computeCommitment(BigInt(secret));
+          commitmentStr = cm.toString();
+        }
+      } catch { /* commitment will be undefined, blockchain.ts handles gracefully */ }
 
-    // Reward is NOT awarded immediately — it will be released after investigation is completed.
+      const { block, contract, onChain } = await addProcurementRecordAsync('whistleblower_report', {
+        reportId: newReport.id,
+        zkProof: proofHash,
+        category: reportForm.category,
+        severity: reportForm.severity,
+        anonymous: anonymousMode,
+        ...(proofData ? { proofData } : {}),
+        ...(commitmentStr ? { commitment: commitmentStr } : {}),
+      });
 
-    setReports([...reports, newReport]);
-    setBlockchainRecords([...blockchainRecords, blockchainRecord]);
-    setShowReportForm(false);
-    setUploadedFiles([]);
-    setReportForm({
-      title: '',
-      category: '',
-      severity: '',
-      relatedId: '',
-      description: '',
-      evidence: '',
-      contactMethod: '',
-      reporterType: '',
-      routedTo: '',
-    });
+      const blockchainRecord = {
+        id: block.hash,
+        type: 'whistleblower_report',
+        reportId: newReport.id,
+        contractId: contract.id,
+        transactionHash: contract.transactionHash,
+        zkProof: proofHash,
+        zkpVerified: zkpReal,
+        timestamp: new Date().toISOString(),
+        verified: onChain,
+        simulated: !onChain,
+        onChain,
+      };
+
+      setReports([...reports, newReport]);
+      setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+
+      setZkpGenerating(false);
+      setSubmitStep(null);
+      setSubmitSuccess({
+        reportId: newReport.id,
+        txHash: contract.transactionHash,
+        onChain,
+        zkpVerified: zkpReal,
+      });
+
+      // Reset form (but keep success visible)
+      setUploadedFiles([]);
+      setReportForm({
+        title: '',
+        category: '',
+        severity: '',
+        relatedId: '',
+        description: '',
+        evidence: '',
+        contactMethod: '',
+        reporterType: '',
+        routedTo: '',
+      });
+    } catch (err: any) {
+      console.error('Report submission failed:', err);
+      setZkpGenerating(false);
+      setSubmitStep(null);
+      setSubmitError(err?.reason || err?.message || 'Submission failed. Please try again.');
+    }
   };
 
   const handleReferReport = async (reportId: string, authority: string) => {
@@ -294,22 +363,22 @@ export function WhistleblowerPortal({
         </button>
       </div>
 
-      {/* Simulated UX Flow Banner */}
+      {/* ZKP Status Banner */}
       <div style={{
         display: 'flex', alignItems: 'flex-start', gap: 12,
-        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '14px 18px',
+        background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: '14px 18px',
       }}>
-        <AlertTriangle style={{ width: 20, height: 20, color: '#d97706', flexShrink: 0, marginTop: 1 }} />
+        <Shield style={{ width: 20, height: 20, color: '#059669', flexShrink: 0, marginTop: 1 }} />
         <div>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#92400e' }}>{t('whistleblower.simulatedFlowNotice')}</p>
-          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#a16207', lineHeight: 1.5 }}>{t('whistleblower.simulatedFlowDesc')}</p>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#065f46' }}>{t('whistleblower.simulatedFlowNotice')}</p>
+          <p style={{ margin: '4px 0 0', fontSize: 12.5, color: '#047857', lineHeight: 1.5 }}>{t('whistleblower.simulatedFlowDesc')}</p>
         </div>
       </div>
 
       {/* Protection Features */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         {[
-          { label: t('whistleblower.zkpProtection'), value: t('whistleblower.zkpSimulated'), icon: Shield, accent: '#7c3aed', bg: '#f5f3ff', iconBg: '#ede9fe', isText: true },
+          { label: t('whistleblower.zkpProtection'), value: t('whistleblower.zkpSimulated'), icon: Shield, accent: '#059669', bg: '#ecfdf5', iconBg: '#d1fae5', isText: true },
           { label: t('whistleblower.totalReports'), value: whistleblowerReports.length, icon: AlertTriangle, accent: '#dc2626', bg: '#fef2f2', iconBg: '#fee2e2' },
           { label: t('whistleblower.underInvestigation'), value: underInvestigation.length, icon: Clock, accent: '#d97706', bg: '#fffbeb', iconBg: '#fef3c7' },
           { label: t('whistleblower.resolvedLabel'), value: resolvedReports.length, icon: CheckCircle, accent: '#059669', bg: '#ecfdf5', iconBg: '#d1fae5' },
@@ -335,215 +404,239 @@ export function WhistleblowerPortal({
 
       {/* Report Submission Form */}
       {showReportForm && (
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-gray-900">{t('whistleblower.submitWhistleblower')}</h3>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setAnonymousMode(!anonymousMode)}
-                aria-pressed={anonymousMode}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors focus:ring-2 focus:ring-purple-400 focus:outline-none ${
-                  anonymousMode
-                    ? 'bg-purple-100 text-purple-800 border border-purple-300'
-                    : 'bg-gray-100 text-gray-600 border border-gray-300'
-                }`}
-              >
-                {anonymousMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                {anonymousMode ? t('whistleblower.anonymousMode') : t('whistleblower.identifiedMode')}
-              </button>
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 2px 8px rgba(0,0,0,.06)', overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{ background: 'linear-gradient(135deg, #0f2942 0%, #1e4976 100%)', padding: '20px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(201,154,60,.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Shield style={{ width: 20, height: 20, color: '#c99a3c' }} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#fff' }}>{t('whistleblower.submitWhistleblower')}</h3>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,.6)' }}>{t('whistleblower.reportsProtected')}</p>
+              </div>
             </div>
+            <button
+              onClick={() => setAnonymousMode(!anonymousMode)}
+              aria-pressed={anonymousMode}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
+                borderRadius: 8, border: anonymousMode ? '1.5px solid #c99a3c' : '1.5px solid rgba(255,255,255,.25)',
+                background: anonymousMode ? 'rgba(201,154,60,.15)' : 'rgba(255,255,255,.08)',
+                color: anonymousMode ? '#c99a3c' : 'rgba(255,255,255,.7)',
+                fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .15s',
+              }}
+            >
+              {anonymousMode ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+              {anonymousMode ? t('whistleblower.anonymousMode') : t('whistleblower.identifiedMode')}
+            </button>
           </div>
 
+          {/* ZKP Banner */}
           {anonymousMode && (
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <Shield className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-purple-900">{t('whistleblower.zkpActive')}</p>
-                  <p className="text-purple-700 mt-1">
-                    {t('whistleblower.zkpDescription')}
-                  </p>
-                </div>
+            <div style={{ margin: '20px 28px 0', padding: '14px 18px', borderRadius: 10, background: 'linear-gradient(135deg, #ecfdf5, #f0fdf4)', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Lock style={{ width: 16, height: 16, color: '#059669' }} />
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#065f46' }}>{t('whistleblower.zkpActive')}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#047857' }}>{t('whistleblower.zkpDescription')}</p>
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmitReport} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-gray-700 mb-2">{t('whistleblower.reportTitle')}</label>
-                <input
-                  type="text"
-                  required
-                  value={reportForm.title}
-                  onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                  placeholder={t('whistleblower.titlePlaceholder')}
-                />
+          <form onSubmit={handleSubmitReport} style={{ padding: '20px 28px 28px' }}>
+            {/* ── Section 1: Report Details ── */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: '#0f2942', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#c99a3c' }}>1</div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f2942' }}>{t('whistleblower.sectionReportDetails')}</span>
               </div>
-
-              <div>
-                <label className="block text-gray-700 mb-2">{t('whistleblower.categoryLabel')}</label>
-                <select
-                  required
-                  value={reportForm.category}
-                  onChange={(e) => setReportForm({ ...reportForm, category: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="">{t('whistleblower.selectCategory')}</option>
-                  {categories.map((cat) => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-700 mb-2">{t('whistleblower.severityLevel')}</label>
-                <select
-                  required
-                  value={reportForm.severity}
-                  onChange={(e) => setReportForm({ ...reportForm, severity: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="">{t('whistleblower.selectSeverity')}</option>
-                  <option value="low">{t('whistleblower.low')}</option>
-                  <option value="medium">{t('whistleblower.medium')}</option>
-                  <option value="high">{t('whistleblower.high')}</option>
-                  <option value="critical">{t('whistleblower.critical')}</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-700 mb-2">{t('whistleblower.relatedTender')}</label>
-                <select
-                  value={reportForm.relatedId}
-                  onChange={(e) => setReportForm({ ...reportForm, relatedId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="">{t('whistleblower.selectIfApplicable')}</option>
-                  {tenders.map((td) => (
-                    <option key={td.id} value={td.id}>{td.title}</option>
-                  ))}
-                  {contracts.map((c) => (
-                    <option key={c.id} value={c.id}>{c.tenderTitle} ({t('whistleblower.contract')})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-gray-700 mb-2">{t('whistleblower.reporterType')}</label>
-                <select
-                  required
-                  value={reportForm.reporterType}
-                  onChange={(e) => {
-                    const type = e.target.value;
-                    let routedTo = '';
-                    if (type === 'citizen') routedTo = 'directorate_contract_oversight';
-                    if (type === 'company_supplier') routedTo = 'debarment_committee_npa';
-                    setReportForm({ ...reportForm, reporterType: type, routedTo });
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="">{t('whistleblower.selectReporterType')}</option>
-                  <option value="government_employee">{t('whistleblower.governmentEmployee')}</option>
-                  <option value="citizen">{t('whistleblower.citizenReporter')}</option>
-                  <option value="company_supplier">{t('whistleblower.companySupplier')}</option>
-                </select>
-              </div>
-
-              {reportForm.reporterType === 'government_employee' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.reportTitle')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={reportForm.title}
+                    onChange={(e) => setReportForm({ ...reportForm, title: e.target.value })}
+                    placeholder={t('whistleblower.titlePlaceholder')}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', transition: 'border .15s', boxSizing: 'border-box' }}
+                    onFocus={(e) => { e.target.style.borderColor = '#c99a3c'; e.target.style.boxShadow = '0 0 0 3px rgba(201,154,60,.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+                  />
+                </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">{t('whistleblower.routeTo')}</label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.categoryLabel')}</label>
                   <select
                     required
-                    value={reportForm.routedTo}
-                    onChange={(e) => setReportForm({ ...reportForm, routedTo: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    value={reportForm.category}
+                    onChange={(e) => setReportForm({ ...reportForm, category: e.target.value })}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
                   >
-                    <option value="">{t('whistleblower.selectAuthority')}</option>
-                    {ROUTING_AUTHORITIES.map((auth) => (
-                      <option key={auth.value} value={auth.value}>{auth.label}</option>
+                    <option value="">{t('whistleblower.selectCategory')}</option>
+                    {categories.map((cat) => (
+                      <option key={cat.value} value={cat.value}>{cat.label}</option>
                     ))}
                   </select>
                 </div>
-              )}
-
-              {(reportForm.reporterType === 'citizen' || reportForm.reporterType === 'company_supplier') && (
-                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-                  <Shield className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm text-blue-800">
-                    {t('whistleblower.autoRouted')}: <strong>{getAuthorityLabel(reportForm.routedTo)}</strong>
-                  </span>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.relatedTender')}</label>
+                  <select
+                    value={reportForm.relatedId}
+                    onChange={(e) => setReportForm({ ...reportForm, relatedId: e.target.value })}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
+                  >
+                    <option value="">{t('whistleblower.selectIfApplicable')}</option>
+                    {tenders.map((td) => (
+                      <option key={td.id} value={td.id}>{td.title}</option>
+                    ))}
+                    {contracts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.tenderTitle} ({t('whistleblower.contract')})</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-gray-700 mb-2">{t('whistleblower.detailedDescription')}</label>
-              <textarea
-                required
-                value={reportForm.description}
-                onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
-                rows={5}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                placeholder={t('whistleblower.descriptionPlaceholder')}
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 mb-2">{t('whistleblower.evidenceInfo')}</label>
-              <textarea
-                value={reportForm.evidence}
-                onChange={(e) => setReportForm({ ...reportForm, evidence: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                placeholder={t('whistleblower.evidencePlaceholder')}
-              />
-            </div>
-
-            {/* File Upload */}
-            <div>
-              <label className="block text-gray-700 mb-2">{t('whistleblower.uploadEvidence')}</label>
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => document.getElementById('evidence-file-input')?.click()}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('evidence-file-input')?.click(); } }}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-orange-400 hover:bg-orange-50 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500"
-              >
-                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-700 font-medium">{t('whistleblower.dragOrClick')}</p>
-                <p className="text-gray-500 text-sm mt-1">{t('whistleblower.acceptedFormats')}</p>
               </div>
-              <input
-                id="evidence-file-input"
-                type="file"
-                multiple
-                accept="image/*,video/*,.pdf"
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-              />
+            </div>
+
+            {/* ── Section 2: Classification ── */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: '#0f2942', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#c99a3c' }}>2</div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f2942' }}>{t('whistleblower.sectionClassification')}</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.severityLevel')}</label>
+                  <select
+                    required
+                    value={reportForm.severity}
+                    onChange={(e) => setReportForm({ ...reportForm, severity: e.target.value })}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
+                  >
+                    <option value="">{t('whistleblower.selectSeverity')}</option>
+                    <option value="low">{t('whistleblower.low')}</option>
+                    <option value="medium">{t('whistleblower.medium')}</option>
+                    <option value="high">{t('whistleblower.high')}</option>
+                    <option value="critical">{t('whistleblower.critical')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.reporterType')}</label>
+                  <select
+                    required
+                    value={reportForm.reporterType}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      let routedTo = '';
+                      if (type === 'citizen') routedTo = 'directorate_contract_oversight';
+                      if (type === 'company_supplier') routedTo = 'debarment_committee_npa';
+                      setReportForm({ ...reportForm, reporterType: type, routedTo });
+                    }}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
+                  >
+                    <option value="">{t('whistleblower.selectReporterType')}</option>
+                    <option value="government_employee">{t('whistleblower.governmentEmployee')}</option>
+                    <option value="citizen">{t('whistleblower.citizenReporter')}</option>
+                    <option value="company_supplier">{t('whistleblower.companySupplier')}</option>
+                  </select>
+                </div>
+                {reportForm.reporterType === 'government_employee' ? (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.routeTo')}</label>
+                    <select
+                      required
+                      value={reportForm.routedTo}
+                      onChange={(e) => setReportForm({ ...reportForm, routedTo: e.target.value })}
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
+                    >
+                      <option value="">{t('whistleblower.selectAuthority')}</option>
+                      {ROUTING_AUTHORITIES.map((auth) => (
+                        <option key={auth.value} value={auth.value}>{auth.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (reportForm.reporterType === 'citizen' || reportForm.reporterType === 'company_supplier') ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', alignSelf: 'end' }}>
+                    <Shield style={{ width: 14, height: 14, color: '#2563eb', flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: '#1e40af', fontWeight: 600 }}>
+                      {t('whistleblower.autoRouted')}: {getAuthorityLabel(reportForm.routedTo)}
+                    </span>
+                  </div>
+                ) : <div />}
+              </div>
+            </div>
+
+            {/* ── Section 3: Description & Evidence ── */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: '#0f2942', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#c99a3c' }}>3</div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#0f2942' }}>{t('whistleblower.sectionEvidence')}</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.detailedDescription')}</label>
+                  <textarea
+                    required
+                    value={reportForm.description}
+                    onChange={(e) => setReportForm({ ...reportForm, description: e.target.value })}
+                    rows={5}
+                    placeholder={t('whistleblower.descriptionCombinedPlaceholder')}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', resize: 'vertical', fontFamily: 'inherit', transition: 'border .15s', boxSizing: 'border-box' }}
+                    onFocus={(e) => { e.target.style.borderColor = '#c99a3c'; e.target.style.boxShadow = '0 0 0 3px rgba(201,154,60,.1)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.uploadEvidence')}</label>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => document.getElementById('evidence-file-input')?.click()}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('evidence-file-input')?.click(); } }}
+                    style={{
+                      border: '2px dashed #d1d5db', borderRadius: 8, padding: '18px 14px', textAlign: 'center',
+                      cursor: 'pointer', transition: 'all .15s', background: '#fafafa',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#c99a3c'; e.currentTarget.style.background = '#fffbeb'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.background = '#fafafa'; }}
+                  >
+                    <Upload style={{ width: 24, height: 24, color: '#9ca3af', margin: '0 auto 6px' }} />
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#374151' }}>{t('whistleblower.dragOrClick')}</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>{t('whistleblower.acceptedFormats')}</p>
+                  </div>
+                  <input
+                    id="evidence-file-input"
+                    type="file"
+                    multiple
+                    accept="image/*,video/*,.pdf"
+                    onChange={handleFileChange}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+              </div>
 
               {uploadedFiles.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {uploadedFiles.map((file, idx) => {
                     const Icon = getFileIcon(file);
                     return (
-                      <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <Icon className="w-5 h-5 text-gray-600 shrink-0" />
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <Icon style={{ width: 18, height: 18, color: '#6b7280', flexShrink: 0 }} />
                           <div>
-                            <p className="text-sm font-medium text-gray-900 truncate max-w-xs">{file.name}</p>
-                            <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#0f2942', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{formatFileSize(file.size)}</p>
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeFile(idx)}
                           aria-label={`${t('whistleblower.removeFile')} ${file.name}`}
-                          className="p-1 rounded hover:bg-gray-200 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500"
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, borderRadius: 4 }}
                         >
-                          <X className="w-4 h-4 text-gray-500" />
+                          <X style={{ width: 14, height: 14, color: '#9ca3af' }} />
                         </button>
                       </div>
                     );
@@ -552,36 +645,152 @@ export function WhistleblowerPortal({
               )}
             </div>
 
+            {/* Secure Contact (non-anonymous only) */}
             {!anonymousMode && (
-              <div>
-                <label className="block text-gray-700 mb-2">{t('whistleblower.secureContact')}</label>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.secureContact')}</label>
                 <input
                   type="text"
                   value={reportForm.contactMethod}
                   onChange={(e) => setReportForm({ ...reportForm, contactMethod: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                   placeholder={t('whistleblower.contactPlaceholder')}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', transition: 'border .15s', boxSizing: 'border-box' }}
+                  onFocus={(e) => { e.target.style.borderColor = '#c99a3c'; e.target.style.boxShadow = '0 0 0 3px rgba(201,154,60,.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
                 />
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
+            {/* Error Message */}
+            {submitError && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', marginBottom: 16 }}>
+                <AlertTriangle style={{ width: 18, height: 18, color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#dc2626' }}>{t('whistleblower.submissionFailed')}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#991b1b' }}>{submitError}</p>
+                </div>
+                <button onClick={() => setSubmitError(null)} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', padding: 2 }}>
+                  <X style={{ width: 14, height: 14, color: '#dc2626' }} />
+                </button>
+              </div>
+            )}
+
+            {/* Progress Steps */}
+            {zkpGenerating && (
+              <div style={{ padding: '14px 18px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Loader2 style={{ width: 16, height: 16, color: '#d97706', animation: 'spin 1s linear infinite' }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>{submitStep}</span>
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#a16207' }}>{t('whistleblower.doNotClose')}</p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
               <button
                 type="submit"
-                className="flex items-center gap-2 bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+                disabled={zkpGenerating}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '11px 28px',
+                  borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 700,
+                  background: zkpGenerating ? '#9ca3af' : 'linear-gradient(135deg, #0f2942, #1e4976)',
+                  color: '#fff', cursor: zkpGenerating ? 'not-allowed' : 'pointer',
+                  transition: 'all .15s', boxShadow: zkpGenerating ? 'none' : '0 2px 8px rgba(15,41,66,.25)',
+                }}
               >
-                <Send className="w-5 h-5" />
-                {t('whistleblower.submitSecurely')}
+                {zkpGenerating ? (
+                  <>
+                    <Loader2 style={{ width: 18, height: 18, animation: 'spin 1s linear infinite' }} />
+                    {submitStep || t('whistleblower.submitting')}
+                  </>
+                ) : (
+                  <>
+                    <Shield style={{ width: 18, height: 18 }} />
+                    {t('whistleblower.submitSecurely')}
+                  </>
+                )}
               </button>
               <button
                 type="button"
-                onClick={() => setShowReportForm(false)}
-                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={zkpGenerating}
+                onClick={() => { setShowReportForm(false); setSubmitError(null); setSubmitSuccess(null); }}
+                style={{
+                  padding: '11px 24px', borderRadius: 10, border: '1.5px solid #d1d5db',
+                  background: '#fff', color: '#374151', fontSize: 14, fontWeight: 600,
+                  cursor: zkpGenerating ? 'not-allowed' : 'pointer', opacity: zkpGenerating ? 0.4 : 1,
+                  transition: 'all .15s',
+                }}
               >
                 {t('whistleblower.cancel')}
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ── Success Confirmation Modal ── */}
+      {submitSuccess && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.5)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '32px 28px', maxWidth: 480, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.25)', textAlign: 'center' }}>
+            {/* Success Icon */}
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <CheckCircle style={{ width: 32, height: 32, color: '#059669' }} />
+            </div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: '#0f2942' }}>
+              {t('whistleblower.reportSubmitted')}
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#6b7280' }}>
+              {t('whistleblower.reportSubmittedDesc')}
+            </p>
+
+            {/* Details */}
+            <div style={{ textAlign: 'left', background: '#f9fafb', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.reportId')}</span>
+                <span style={{ fontSize: 12, color: '#0f2942', fontWeight: 700, fontFamily: 'monospace' }}>{submitSuccess.reportId}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.zkpStatus')}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: submitSuccess.zkpVerified ? '#059669' : '#d97706' }}>
+                  {submitSuccess.zkpVerified ? t('whistleblower.zkpVerified') : t('whistleblower.zkpFallback')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.blockchainStatus')}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: submitSuccess.onChain ? '#059669' : '#d97706' }}>
+                  {submitSuccess.onChain ? t('whistleblower.onChainConfirmed') : t('whistleblower.simulatedRecord')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.txHash')}</span>
+                <span style={{ fontSize: 11, color: '#0f2942', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{submitSuccess.txHash}</span>
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div style={{ textAlign: 'left', background: '#eff6ff', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: '#1e40af' }}>{t('whistleblower.nextSteps')}</h4>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#1e3a5f', lineHeight: 1.8 }}>
+                <li>{t('whistleblower.nextStep1')}</li>
+                <li>{t('whistleblower.nextStep2')}</li>
+                <li>{t('whistleblower.nextStep3')}</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => { setSubmitSuccess(null); setShowReportForm(false); }}
+              style={{
+                width: '100%', padding: '12px 24px', borderRadius: 10, border: 'none',
+                background: '#0f2942', color: '#fff', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', transition: 'background .15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#1e4976'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#0f2942'; }}
+            >
+              {t('whistleblower.done')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -633,8 +842,8 @@ export function WhistleblowerPortal({
                           {report.investigationStatus}
                         </span>
                         {report.isAnonymous && (
-                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <Shield style={{ width: 10, height: 10 }} /> Simulated ZKP
+                          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: report.zkpVerified ? '#d1fae5' : '#f5f3ff', color: report.zkpVerified ? '#065f46' : '#7c3aed', border: report.zkpVerified ? '1px solid #a7f3d0' : '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Shield style={{ width: 10, height: 10 }} /> {report.zkpVerified ? 'ZKP Verified (Groth16)' : 'Simulated ZKP'}
                           </span>
                         )}
                         {blockchainRecords.some(r => r.reportId === report.id && r.onChain) && (

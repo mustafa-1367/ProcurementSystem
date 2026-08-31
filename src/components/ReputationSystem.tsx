@@ -31,6 +31,15 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
   const [expandedVendor, setExpandedVendor] = useState<string | null>(null);
   const { t } = useTranslation();
 
+  // Deterministic hash from vendor name — replaces Math.random() so scores stay stable across re-renders
+  const stableHash = (str: string, seed: number = 0): number => {
+    let h = seed;
+    for (let i = 0; i < str.length; i++) {
+      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+    }
+    return ((h >>> 0) % 1000) / 1000; // returns 0–1
+  };
+
   const calculateVendorScores = () => {
     const vendors: { [key: string]: any } = {};
 
@@ -66,11 +75,11 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
       const vendor = vendors[vendorName];
       vendor.avgBidAccuracy = Math.min(95, 70 + (vendor.wonContracts / vendor.totalBids) * 25);
       vendor.onTimeDelivery = vendor.completedContracts > 0
-        ? Math.min(100, 75 + Math.random() * 25) : 0;
+        ? Math.min(100, 75 + stableHash(vendorName, 1) * 25) : 0;
       vendor.qualityScore = vendor.completedContracts > 0
-        ? Math.min(95, 70 + Math.random() * 25) : 0;
+        ? Math.min(95, 70 + stableHash(vendorName, 2) * 25) : 0;
       vendor.complianceScore = vendor.totalBids > 0
-        ? Math.min(100, 80 + Math.random() * 20) : 0;
+        ? Math.min(100, 80 + stableHash(vendorName, 3) * 20) : 0;
       vendor.reputationScore = (
         vendor.avgBidAccuracy * 0.25 +
         vendor.onTimeDelivery * 0.30 +
@@ -305,13 +314,13 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
                         </span>
                       </div>
                       <div style={{ display: 'flex', gap: 16, fontSize: '12px', color: '#6b7280' }}>
-                        <span>{vendor.totalBids} bids</span>
-                        <span>{vendor.wonContracts} won</span>
-                        <span>{vendor.completedContracts} completed</span>
+                        <span>{vendor.totalBids} {t('reputation.bidsLabel')}</span>
+                        <span>{vendor.wonContracts} {t('reputation.won')}</span>
+                        <span>{vendor.completedContracts} {t('reputation.completedLabel')}</span>
                         {vendor.totalValue > 0 && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                             <Banknote style={{ width: 12, height: 12 }} />
-                            {vendor.totalValue.toLocaleString()} AFN
+                            {vendor.totalValue.toLocaleString()} {t('reputation.afn')}
                           </span>
                         )}
                       </div>

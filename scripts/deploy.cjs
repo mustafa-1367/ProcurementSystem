@@ -21,6 +21,20 @@ async function main() {
   const tokenAddress = await token.getAddress();
   console.log("ProcToken deployed to:", tokenAddress);
 
+  // Deploy Groth16Verifier (ZKP verifier)
+  const Groth16Verifier = await hre.ethers.getContractFactory("Groth16Verifier");
+  const groth16Verifier = await Groth16Verifier.deploy();
+  await groth16Verifier.waitForDeployment();
+  const groth16Address = await groth16Verifier.getAddress();
+  console.log("Groth16Verifier deployed to:", groth16Address);
+
+  // Deploy WhistleblowerVerifier (uses Groth16Verifier)
+  const WhistleblowerVerifier = await hre.ethers.getContractFactory("WhistleblowerVerifier");
+  const whistleblowerVerifier = await WhistleblowerVerifier.deploy(groth16Address);
+  await whistleblowerVerifier.waitForDeployment();
+  const whistleblowerAddress = await whistleblowerVerifier.getAddress();
+  console.log("WhistleblowerVerifier deployed to:", whistleblowerAddress);
+
   // Save deployment addresses
   const deployment = {
     network: hre.network.name,
@@ -28,6 +42,8 @@ async function main() {
     contracts: {
       ProcurementSystem: procurementAddress,
       ProcToken: tokenAddress,
+      Groth16Verifier: groth16Address,
+      WhistleblowerVerifier: whistleblowerAddress,
     },
     deployer: deployer.address,
     timestamp: new Date().toISOString(),
@@ -46,6 +62,7 @@ async function main() {
 
   const procArtifact = await hre.artifacts.readArtifact("ProcurementSystem");
   const tokenArtifact = await hre.artifacts.readArtifact("ProcToken");
+  const wbVerifierArtifact = await hre.artifacts.readArtifact("WhistleblowerVerifier");
 
   fs.writeFileSync(
     path.join(abisDir, "ProcurementSystem.json"),
@@ -54,6 +71,10 @@ async function main() {
   fs.writeFileSync(
     path.join(abisDir, "ProcToken.json"),
     JSON.stringify(tokenArtifact.abi, null, 2)
+  );
+  fs.writeFileSync(
+    path.join(abisDir, "WhistleblowerVerifier.json"),
+    JSON.stringify(wbVerifierArtifact.abi, null, 2)
   );
   console.log("ABIs saved to src/utils/abis/");
 }

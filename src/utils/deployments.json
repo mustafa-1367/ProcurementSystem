@@ -2,9 +2,11 @@
   "network": "sepolia",
   "chainId": 11155111,
   "contracts": {
-    "ProcurementSystem": "0x32Daec6F7Efd4253053EC32AC8D884B53BACCF82",
-    "ProcToken": "0xF65e62017832549A9bd15B064BDDB57Be9db8886"
+    "ProcurementSystem": "0x5D8ca4B7B3929624951c3AD321f3f09DF185b30E",
+    "ProcToken": "0xeA1694813ce93bdBA6CF3ad39Ff9a0fBFE0a5F6f",
+    "Groth16Verifier": "0xF4a71E22c07187dF6eA8Bf689B24EEfdD57BF370",
+    "WhistleblowerVerifier": "0xf3FC3eb93e38f3Be978Da0E5F1a24fD7fDb0E309"
   },
   "deployer": "0xf25DA310af24B6C28237c173e81b19665766E875",
-  "timestamp": "2026-08-28T09:31:24.594Z"
+  "timestamp": "2026-08-31T13:08:37.779Z"
 }

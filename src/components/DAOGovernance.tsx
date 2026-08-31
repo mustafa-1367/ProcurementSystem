@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Users, Vote, AlertCircle, CheckCircle, XCircle, MessageSquare, TrendingUp, Shield, Upload, FileText, Image, Video, X } from 'lucide-react';
+import { Users, Vote, AlertCircle, CheckCircle, XCircle, MessageSquare, TrendingUp, Shield, Upload, FileText, Image, Video, X, Scale } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { useWeb3 } from '../utils/useWeb3';
@@ -361,8 +361,8 @@ export function DAOGovernance({
             <p className="text-gray-600 text-sm mb-4">{t('dao.oversightDesc')}</p>
 
             <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-medium mb-2">{t('dao.committeeMembers')} ({committeeMembers.length}/3 {t('dao.membersRequired')})</label>
-              <div className="flex gap-2 mb-2">
+              <label className="block text-gray-700 text-sm font-medium mb-2">{t('dao.committeeMembers')}</label>
+              <div className="flex gap-2 mb-3" style={{ maxWidth: 480 }}>
                 <input
                   type="text"
                   value={memberInput}
@@ -384,21 +384,16 @@ export function DAOGovernance({
                       setMemberInput('');
                     }
                   }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors whitespace-nowrap"
                 >
                   {t('dao.addMember')}
                 </button>
               </div>
-              {committeeMembers.length < 3 && (
-                <p className="text-amber-600 text-xs flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {t('dao.minimumMembers')}
-                </p>
-              )}
               {committeeMembers.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex flex-wrap gap-2 mb-3">
                   {committeeMembers.map((m, i) => (
                     <span key={i} className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded-full text-sm">
+                      <Users className="w-3 h-3" />
                       {m}
                       <button onClick={() => setCommitteeMembers(committeeMembers.filter((_, idx) => idx !== i))} className="text-blue-500 hover:text-blue-700">
                         <X className="w-3 h-3" />
@@ -407,22 +402,48 @@ export function DAOGovernance({
                   ))}
                 </div>
               )}
+              {committeeMembers.length < 3 ? (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" style={{ maxWidth: 480 }}>
+                  <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                  <span className="text-amber-700 text-xs font-medium">{committeeMembers.length}/3 — {t('dao.minimumMembers')}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2" style={{ maxWidth: 480 }}>
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                  <span className="text-green-700 text-xs font-medium">{committeeMembers.length}/3 — Committee ready to process complaints</span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Oversight Stats */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-              <p className="text-gray-600 text-sm">{t('dao.complaintsCount')}</p>
-              <p className="text-gray-900 text-2xl font-bold mt-1">{oversightComplaints.length}</p>
+            <div className="bg-blue-50 rounded-lg shadow-sm p-5 border border-blue-200 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <MessageSquare className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-blue-600 text-xs font-medium">{t('dao.complaintsCount')}</p>
+                <p className="text-blue-900 text-2xl font-bold">{oversightComplaints.length}</p>
+              </div>
             </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-              <p className="text-gray-600 text-sm">{t('dao.validComplaints')}</p>
-              <p className="text-green-700 text-2xl font-bold mt-1">{validComplaints.length}</p>
+            <div className="bg-green-50 rounded-lg shadow-sm p-5 border border-green-200 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-green-600 text-xs font-medium">{t('dao.validComplaints')}</p>
+                <p className="text-green-900 text-2xl font-bold">{validComplaints.length}</p>
+              </div>
             </div>
-            <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-              <p className="text-gray-600 text-sm">{t('dao.invalidComplaints')}</p>
-              <p className="text-red-700 text-2xl font-bold mt-1">{invalidComplaints.length}</p>
+            <div className="bg-red-50 rounded-lg shadow-sm p-5 border border-red-200 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-red-600 text-xs font-medium">{t('dao.invalidComplaints')}</p>
+                <p className="text-red-900 text-2xl font-bold">{invalidComplaints.length}</p>
+              </div>
             </div>
           </div>
 
@@ -529,81 +550,166 @@ export function DAOGovernance({
           </div>
 
           {/* Routing Dashboard */}
-          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-            <h3 className="text-gray-900 mb-4 font-semibold">{t('dao.routingDashboard')}</h3>
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,.06)', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #0f2942, #1e4976)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Scale style={{ width: 18, height: 18, color: '#c99a3c' }} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f2942' }}>{t('dao.routingDashboard')}</h3>
+                  <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>{oversightComplaints.length} {oversightComplaints.length === 1 ? 'complaint' : 'complaints'}</p>
+                </div>
+              </div>
+              {oversightComplaints.length > 0 && (
+                <div style={{ display: 'flex', gap: 12, fontSize: 12, fontWeight: 600 }}>
+                  <span style={{ color: '#059669' }}>{oversightComplaints.filter(c => c.routingDecision === 'evaluation_committee').length} Valid</span>
+                  <span style={{ color: '#dc2626' }}>{oversightComplaints.filter(c => c.routingDecision === 'dismissed').length} Dismissed</span>
+                  <span style={{ color: '#d97706' }}>{oversightComplaints.filter(c => !c.routingDecision).length} Pending</span>
+                </div>
+              )}
+            </div>
+
             {oversightComplaints.length === 0 ? (
-              <div className="text-center py-8">
-                <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">{t('dao.noComplaints')}</p>
+              <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                  <AlertCircle style={{ width: 26, height: 26, color: '#9ca3af' }} />
+                </div>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#6b7280' }}>{t('dao.noComplaints')}</p>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>Complaints will appear here once submitted</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {oversightComplaints.map((complaint) => (
-                  <div key={complaint.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-gray-900 font-medium">{complaint.title}</h4>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            complaint.level === 'central_npa' ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'
-                          }`}>
-                            {complaint.level === 'central_npa' ? t('dao.centralNPA') : t('dao.ministryLevel')}
-                          </span>
-                          {blockchainRecords.some(r => r.disputeId === complaint.id && r.onChain) && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+              <div style={{ padding: '12px 16px 16px' }}>
+                {oversightComplaints.map((complaint, idx) => {
+                  const isValid = complaint.routingDecision === 'evaluation_committee';
+                  const isDismissed = complaint.routingDecision === 'dismissed';
+                  const isPending = !complaint.routingDecision;
+                  const borderColor = isValid ? '#059669' : isDismissed ? '#dc2626' : '#d97706';
+                  const isOnChain = blockchainRecords.some(r => r.disputeId === complaint.id && r.onChain);
+
+                  return (
+                    <div
+                      key={complaint.id}
+                      style={{
+                        position: 'relative',
+                        borderRadius: 10,
+                        border: '1px solid #e5e7eb',
+                        borderLeft: `4px solid ${borderColor}`,
+                        padding: '14px 18px',
+                        marginBottom: idx < oversightComplaints.length - 1 ? 10 : 0,
+                        background: isPending ? '#fffbeb' : '#fff',
+                        transition: 'box-shadow .15s, transform .15s',
+                        cursor: 'default',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,.08)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}
+                    >
+                      {/* Top row: title + badges | status */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f2942' }}>{complaint.title}</h4>
+                            <span style={{
+                              fontSize: 11, fontWeight: 600, padding: '2px 10px', borderRadius: 999,
+                              background: complaint.level === 'central_npa' ? '#f3e8ff' : '#f0fdfa',
+                              color: complaint.level === 'central_npa' ? '#7c3aed' : '#0d9488',
+                            }}>
+                              {complaint.level === 'central_npa' ? t('dao.centralNPA') : t('dao.ministryLevel')}
+                            </span>
+                            {isOnChain && (
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>On-Chain</span>
+                            )}
+                          </div>
+                          {/* Description + metadata in compact row */}
+                          <p style={{ margin: '6px 0 0', fontSize: 13, color: '#4b5563', lineHeight: 1.5 }}>{complaint.description}</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                              {new Date(complaint.createdAt).toLocaleDateString()}
+                            </span>
+                            {complaint.evidence && (
+                              <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                <span style={{ color: '#9ca3af' }}>{t('dao.complaintEvidence')}:</span> {complaint.evidence}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status / Actions */}
+                        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                          {isValid ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '8px 14px' }}>
+                              <CheckCircle style={{ width: 18, height: 18, color: '#059669' }} />
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#059669', lineHeight: 1.2 }}>{t('dao.complaintValid')}</div>
+                              </div>
+                            </div>
+                          ) : isDismissed ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '8px 14px' }}>
+                              <XCircle style={{ width: 18, height: 18, color: '#dc2626' }} />
+                              <div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', lineHeight: 1.2 }}>{t('dao.complaintInvalid')}</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                onClick={() => handleMarkComplaint(complaint.id, true)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                                  borderRadius: 8, border: '1.5px solid #059669', background: '#ecfdf5',
+                                  color: '#059669', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                  transition: 'all .15s',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#059669'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = '#ecfdf5'; e.currentTarget.style.color = '#059669'; }}
+                              >
+                                <CheckCircle style={{ width: 14, height: 14 }} />
+                                {t('dao.markValid')}
+                              </button>
+                              <button
+                                onClick={() => handleMarkComplaint(complaint.id, false)}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                                  borderRadius: 8, border: '1.5px solid #dc2626', background: '#fef2f2',
+                                  color: '#dc2626', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                  transition: 'all .15s',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = '#dc2626'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#dc2626'; }}
+                              >
+                                <XCircle style={{ width: 14, height: 14 }} />
+                                {t('dao.markInvalid')}
+                              </button>
+                            </div>
                           )}
                         </div>
-                        <p className="text-gray-600 text-sm">{complaint.description}</p>
-                        {complaint.evidence && (
-                          <p className="text-gray-500 text-xs mt-1">{t('dao.complaintEvidence')}: {complaint.evidence}</p>
-                        )}
-                        <p className="text-gray-400 text-xs mt-1">{new Date(complaint.createdAt).toLocaleDateString()}</p>
                       </div>
-                      <div>
-                        {complaint.routingDecision === 'evaluation_committee' ? (
-                          <span className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 px-3 py-1 rounded-full text-xs font-medium">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            {t('dao.complaintValid')}
-                          </span>
-                        ) : complaint.routingDecision === 'dismissed' ? (
-                          <span className="inline-flex items-center gap-1.5 bg-red-50 text-red-700 border border-red-200 px-3 py-1 rounded-full text-xs font-medium">
-                            <XCircle className="w-3.5 h-3.5" />
-                            {t('dao.complaintInvalid')}
-                          </span>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleMarkComplaint(complaint.id, true)}
-                              className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-green-700 transition-colors"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              {t('dao.markValid')}
-                            </button>
-                            <button
-                              onClick={() => handleMarkComplaint(complaint.id, false)}
-                              className="flex items-center gap-1 bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-red-700 transition-colors"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              {t('dao.markInvalid')}
-                            </button>
-                          </div>
-                        )}
-                      </div>
+
+                      {/* Footer: metadata chips */}
+                      {(complaint.committeeMembers?.length > 0 || complaint.sourceReportId) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 10, paddingTop: 10, borderTop: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
+                          {complaint.committeeMembers && complaint.committeeMembers.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <Users style={{ width: 14, height: 14, color: '#6b7280' }} />
+                              <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                {t('dao.committeeMembers')}: <span style={{ fontWeight: 600, color: '#374151' }}>{complaint.committeeMembers.join(', ')}</span>
+                              </span>
+                            </div>
+                          )}
+                          {complaint.sourceReportId && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <MessageSquare style={{ width: 14, height: 14, color: '#c99a3c' }} />
+                              <span style={{ fontSize: 12, color: '#c99a3c', fontWeight: 600 }}>
+                                {t('dao.linkedReport')}: {complaint.sourceReportId}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {complaint.committeeMembers && complaint.committeeMembers.length > 0 && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <Users className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="text-xs text-gray-500">{t('dao.committeeMembers')}: {complaint.committeeMembers.join(', ')}</span>
-                      </div>
-                    )}
-                    {complaint.sourceReportId && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <MessageSquare className="w-3.5 h-3.5 text-orange-400" />
-                        <span className="text-xs text-orange-600">{t('dao.linkedReport')}: {complaint.sourceReportId}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -651,7 +757,7 @@ export function DAOGovernance({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600">{t('dao.daoMembers')}</p>
-              <p className="text-gray-900 mt-1">{t('dao.simulatedCount')}</p>
+              <p className="text-gray-900 mt-1">{connected && isCorrectNetwork ? '1 (You)' : 'Connect Wallet'}</p>
             </div>
             <Users className="w-8 h-8 text-yellow-600" />
           </div>

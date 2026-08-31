@@ -2,6 +2,7 @@ import { BrowserProvider, JsonRpcProvider, Contract, type Signer, type Provider 
 import deployments from './deployments.json';
 import ProcurementSystemABI from './abis/ProcurementSystem.json';
 import ProcTokenABI from './abis/ProcToken.json';
+import WhistleblowerVerifierABI from './abis/WhistleblowerVerifier.json';
 
 // Network configurations
 const NETWORKS: Record<number, { name: string; rpcUrl: string }> = {
@@ -18,6 +19,7 @@ export interface Web3State {
   signer: Signer | null;
   procurementContract: Contract | null;
   tokenContract: Contract | null;
+  whistleblowerVerifierContract: Contract | null;
   isCorrectNetwork: boolean;
 }
 
@@ -30,6 +32,7 @@ const initialState: Web3State = {
   signer: null,
   procurementContract: null,
   tokenContract: null,
+  whistleblowerVerifierContract: null,
   isCorrectNetwork: false,
 };
 
@@ -76,6 +79,7 @@ export async function connectWallet(): Promise<Web3State> {
 
   let procurementContract: Contract | null = null;
   let tokenContract: Contract | null = null;
+  let whistleblowerVerifierContract: Contract | null = null;
 
   if (isCorrectNetwork) {
     procurementContract = new Contract(
@@ -88,6 +92,13 @@ export async function connectWallet(): Promise<Web3State> {
       ProcTokenABI,
       signer
     );
+    if ((deployments.contracts as any).WhistleblowerVerifier) {
+      whistleblowerVerifierContract = new Contract(
+        (deployments.contracts as any).WhistleblowerVerifier,
+        WhistleblowerVerifierABI,
+        signer
+      );
+    }
   }
 
   currentState = {
@@ -99,6 +110,7 @@ export async function connectWallet(): Promise<Web3State> {
     signer,
     procurementContract,
     tokenContract,
+    whistleblowerVerifierContract,
     isCorrectNetwork,
   };
 

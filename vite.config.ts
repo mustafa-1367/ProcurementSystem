@@ -1,12 +1,13 @@
 
   import { defineConfig } from 'vite';
   import react from '@vitejs/plugin-react-swc';
+  import { nodePolyfills } from 'vite-plugin-node-polyfills';
   import path from 'path';
 
   export default defineConfig({
     // Base path for GitHub Pages (repo hosted at https://saaysalim.github.io/ProcurementSystem)
     base: '/ProcurementSystem/',
-    plugins: [react()],
+    plugins: [react(), nodePolyfills()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
       alias: {

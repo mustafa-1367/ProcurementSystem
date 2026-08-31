@@ -317,3 +317,9 @@ input[type="file"]::file-selector-button:hover {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Spinner animation for loading indicators */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
