@@ -29,19 +29,8 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
     setSubmitting(true);
 
     const tender = tenders.find(td => td.id === form.tenderId);
-    const disputeId = `OBJ-${Date.now()}`;
-
-    // Call blockchain FIRST so MetaMask popup opens immediately
-    const { block, contract, success, onChain } = await addProcurementRecordAsync('objection', {
-      disputeId,
-      objectionId: disputeId,
-      tenderId: form.tenderId,
-      title: form.grounds,
-      timestamp: Date.now(),
-    });
-
     const newDispute = {
-      id: disputeId,
+      id: `OBJ-${Date.now()}`,
       tenderId: form.tenderId,
       tenderTitle: tender?.title || form.tenderId,
       title: `Objection: ${tender?.title || form.tenderId}`,
@@ -62,11 +51,19 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
 
     setDisputes([...disputes, newDispute]);
 
+    const { block, contract, success, onChain } = await addProcurementRecordAsync('objection', {
+      disputeId: newDispute.id,
+      objectionId: newDispute.id,
+      tenderId: form.tenderId,
+      title: newDispute.grounds,
+      timestamp: Date.now(),
+    });
+
     if (success) {
       setBlockchainRecords([...blockchainRecords, {
         id: block.hash,
         type: 'objection_filed',
-        disputeId,
+        disputeId: newDispute.id,
         contractId: contract.id,
         transactionHash: contract.transactionHash,
         timestamp: new Date().toISOString(),
@@ -78,7 +75,7 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
 
     setSubmitting(false);
     setSubmitSuccess({
-      objectionId: disputeId,
+      objectionId: newDispute.id,
       txHash: contract.transactionHash,
       onChain,
       tenderTitle: tender?.title || form.tenderId,
