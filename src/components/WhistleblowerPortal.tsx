@@ -107,13 +107,8 @@ export function WhistleblowerPortal({
     try {
       setSubmitStep(t('whistleblower.stepGeneratingProof'));
 
-      // Generate real ZKP using Circom/snarkjs
-      let secret = localStorage.getItem('wb_secret');
-      if (!secret) {
-        const newSecret = generateUserSecret();
-        localStorage.setItem('wb_secret', newSecret.toString());
-        secret = newSecret.toString();
-      }
+      // Generate real ZKP using Circom/snarkjs — fresh secret per report to avoid duplicate nullifiers
+      const secret = generateUserSecret().toString();
 
       const commitment = await computeCommitment(BigInt(secret));
       const commitments = [commitment];
