@@ -405,10 +405,10 @@ function AppContent() {
           <div className="header-controls flex items-center" style={{ gap: 6 }}>
             <nav aria-label={t('role.switchRole')} className="role-switch flex" style={{ gap: 6, background: 'rgba(255,255,255,.08)', padding: 4, borderRadius: 999 }}>
               {ALL_ROLES.map((role) => {
-                // When wallet connected: lock to on-chain role (or citizen if no role registered)
-                const isLockedToOnChain = connected;
                 const allowedRole = onChainRole ?? 'citizen';
-                const isDisabled = isLockedToOnChain && role !== allowedRole;
+                // Public (citizen) is ALWAYS accessible; other roles require wallet auth
+                const isDisabled = connected && role !== 'citizen' && role !== allowedRole;
+                const isActive = userRole === role;
                 return (
                   <button
                     key={role}
@@ -420,8 +420,8 @@ function AppContent() {
                     title={isDisabled ? t('role.roleLocked') : undefined}
                     style={{
                       border: 'none',
-                      background: userRole === role ? '#c99a3c' : 'transparent',
-                      color: userRole === role ? '#0f2942' : '#dbe4ee',
+                      background: isActive ? '#c99a3c' : 'transparent',
+                      color: isActive ? '#0f2942' : '#dbe4ee',
                       padding: connected ? '5px 7px' : '6px 10px',
                       borderRadius: 999,
                       fontSize: '11.5px',
@@ -435,13 +435,13 @@ function AppContent() {
                       gap: 3,
                     }}
                     className="focus:outline-none focus:ring-2 focus:ring-white focus:ring-inset"
-                    onMouseEnter={(e) => { if (userRole !== role && !isDisabled) (e.target as HTMLElement).style.background = 'rgba(255,255,255,.10)'; }}
-                    onMouseLeave={(e) => { if (userRole !== role) (e.target as HTMLElement).style.background = 'transparent'; }}
+                    onMouseEnter={(e) => { if (!isActive && !isDisabled) (e.target as HTMLElement).style.background = 'rgba(255,255,255,.10)'; }}
+                    onMouseLeave={(e) => { if (!isActive) (e.target as HTMLElement).style.background = 'transparent'; }}
                   >
                     {isDisabled && <Lock style={{ width: 11, height: 11, opacity: 0.7 }} />}
                     {t(`role.${role}`)}
-                    {connected && allowedRole === role && (
-                      <span style={{ marginLeft: 2, fontSize: '9px', verticalAlign: 'super', color: userRole === role ? '#065f46' : '#6ee7b7' }}>●</span>
+                    {isActive && connected && (
+                      <span style={{ marginLeft: 2, fontSize: '9px', verticalAlign: 'super', color: '#065f46' }}>●</span>
                     )}
                   </button>
                 );
