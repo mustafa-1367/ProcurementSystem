@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Scale, FileUp, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Scale, FileUp, CheckCircle, Clock, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 
@@ -14,8 +14,8 @@ interface DisputesAppealsProps {
 
 export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, setBlockchainRecords, blockchainRecords }: DisputesAppealsProps) {
   const { t } = useTranslation();
-  const [submitted, setSubmitted] = useState(false);
-  const [submittedId, setSubmittedId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState<{ objectionId: string; txHash: string; onChain: boolean; tenderTitle: string } | null>(null);
   const [form, setForm] = useState({
     tenderId: '',
     grounds: '',
@@ -24,17 +24,29 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.tenderId || !form.grounds) return;
+    if (!form.tenderId || !form.grounds || submitting) return;
+
+    setSubmitting(true);
 
     const tender = tenders.find(td => td.id === form.tenderId);
     const newDispute = {
       id: `OBJ-${Date.now()}`,
       tenderId: form.tenderId,
       tenderTitle: tender?.title || form.tenderId,
+      title: `Objection: ${tender?.title || form.tenderId}`,
+      description: form.grounds,
+      relatedId: form.tenderId,
       grounds: form.grounds,
-      status: 'filed',
+      type: 'oversight_complaint',
+      status: 'voting',
       filedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       stage: 1,
+      votes: { approve: 0, reject: 0, totalVoters: 0 },
+      votingDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      resolution: null,
+      routingDecision: null,
+      flaggedForReReview: false,
     };
 
     const updated = [...disputes, newDispute];
@@ -62,8 +74,13 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
       }]);
     }
 
-    setSubmittedId(newDispute.id);
-    setSubmitted(true);
+    setSubmitting(false);
+    setSubmitSuccess({
+      objectionId: newDispute.id,
+      txHash: contract.transactionHash,
+      onChain,
+      tenderTitle: tender?.title || form.tenderId,
+    });
     setForm({ tenderId: '', grounds: '', evidence: null });
   };
 
@@ -173,27 +190,19 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
 
             <button
               type="submit"
+              disabled={submitting}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 borderRadius: 8, padding: '9px 15px', fontSize: '13.5px', fontWeight: 700,
-                cursor: 'pointer', border: '1px solid transparent', transition: '.15s',
-                background: '#0f2942', color: '#fff',
+                cursor: submitting ? 'wait' : 'pointer', border: '1px solid transparent', transition: '.15s',
+                background: '#0f2942', color: '#fff', opacity: submitting ? 0.7 : 1,
               }}
-              onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#173d61'; }}
+              onMouseEnter={(e) => { if (!submitting) (e.target as HTMLElement).style.background = '#173d61'; }}
               onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#0f2942'; }}
             >
-              {t('disputes.fileObjection')}
+              {submitting && <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />}
+              {submitting ? t('disputes.submitting') : t('disputes.fileObjection')}
             </button>
-
-            {/* Submission confirmation */}
-            {submitted && (
-              <div style={{
-                border: '1px solid #bcd6f5', background: '#eef5fd', borderRadius: 8,
-                padding: '11px 13px', fontSize: 13, color: '#164a86', marginTop: 14,
-              }}>
-                {t('disputes.submittedNotice')} <strong style={{ fontFamily: 'ui-monospace, monospace' }}>{submittedId}</strong>
-              </div>
-            )}
           </form>
         </div>
 
@@ -258,6 +267,66 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Success Confirmation Modal ── */}
+      {submitSuccess && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.5)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '32px 28px', maxWidth: 480, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.25)', textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <CheckCircle style={{ width: 32, height: 32, color: '#059669' }} />
+            </div>
+            <h3 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 800, color: '#0f2942' }}>
+              {t('disputes.objectionSubmitted')}
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: 14, color: '#6b7280' }}>
+              {t('disputes.objectionSubmittedDesc')}
+            </p>
+
+            <div style={{ textAlign: 'left', background: '#f9fafb', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('disputes.objectionId')}</span>
+                <span style={{ fontSize: 12, color: '#0f2942', fontWeight: 700, fontFamily: 'monospace' }}>{submitSuccess.objectionId}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('disputes.relatedTender')}</span>
+                <span style={{ fontSize: 12, color: '#0f2942', fontWeight: 700 }}>{submitSuccess.tenderTitle}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('disputes.blockchainStatus')}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: submitSuccess.onChain ? '#059669' : '#d97706' }}>
+                  {submitSuccess.onChain ? t('disputes.onChainConfirmed') : t('disputes.simulatedRecord')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('disputes.txHash')}</span>
+                <span style={{ fontSize: 11, color: '#0f2942', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{submitSuccess.txHash}</span>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'left', background: '#eff6ff', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700, color: '#1e40af' }}>{t('disputes.nextSteps')}</h4>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#1e3a5f', lineHeight: 1.8 }}>
+                <li>{t('disputes.nextStep1')}</li>
+                <li>{t('disputes.nextStep2')}</li>
+                <li>{t('disputes.nextStep3')}</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => setSubmitSuccess(null)}
+              style={{
+                width: '100%', padding: '12px 24px', borderRadius: 10, border: 'none',
+                background: '#0f2942', color: '#fff', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', transition: 'background .15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#1e4976'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#0f2942'; }}
+            >
+              {t('disputes.done')}
+            </button>
+          </div>
         </div>
       )}
     </div>

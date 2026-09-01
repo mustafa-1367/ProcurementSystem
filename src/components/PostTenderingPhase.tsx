@@ -154,7 +154,7 @@ export function PostTenderingPhase({
 
   // Feature 4: Detect tenders flagged for re-review via oversight complaints
   const flaggedForReReview = disputes
-    .filter((d) => d.type === 'oversight_complaint' && d.flaggedForReReview && d.routingDecision === 'evaluation_committee')
+    .filter((d) => d.flaggedForReReview && d.routingDecision === 'evaluation_committee')
     .map((d) => ({ tenderId: d.relatedId, complaintId: d.id, complaintTitle: d.title }));
   const flaggedTenderIds = flaggedForReReview.map((f) => f.tenderId);
 

@@ -184,6 +184,9 @@ export function DAOGovernance({
     let resolution = dispute.resolution;
 
     // Auto-resolve only if quorum is met (on-chain contract auto-resolves at 10 votes)
+    let routingDecision = dispute.routingDecision || null;
+    let flaggedForReReview = dispute.flaggedForReReview || false;
+
     if (newVotes.totalVoters >= QUORUM_THRESHOLD) {
       const approvalRate = (newVotes.approve / newVotes.totalVoters) * 100;
       status = 'resolved';
@@ -192,10 +195,16 @@ export function DAOGovernance({
         approvalRate,
         resolvedAt: new Date().toISOString(),
       };
+
+      // If approved, route to Evaluation Committee for re-review
+      if (approvalRate >= 60) {
+        routingDecision = 'evaluation_committee';
+        flaggedForReReview = true;
+      }
     }
 
     const updatedDisputes = disputes.map((d) =>
-      d.id === disputeId ? { ...d, votes: newVotes, status, resolution } : d
+      d.id === disputeId ? { ...d, votes: newVotes, status, resolution, routingDecision, flaggedForReReview, type: d.type || 'oversight_complaint' } : d
     );
 
     setDisputes(updatedDisputes);
