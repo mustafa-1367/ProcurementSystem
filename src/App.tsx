@@ -711,8 +711,8 @@ function AppContent() {
         padding: '10px 22px',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
       }}>
-        <Activity style={{ width: 16, height: 16, color: connected ? '#065f46' : '#92400e' }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: connected ? '#065f46' : '#78350f', flex: 1, textAlign: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: connected ? '#065f46' : '#78350f', flex: 1, textAlign: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Activity style={{ width: 15, height: 15, flexShrink: 0 }} />
           {connected ? t('app.blockchainBanner') : t('app.simulationBanner')}
         </span>
         {tenders.length === 0 && (
