@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, Shield, Eye, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2 } from 'lucide-react';
-import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
+import { addProcurementRecordAsync, blockchain, payWhistleblowerReward } from '../utils/blockchain';
+import { getWeb3State } from '../utils/web3Provider';
 import { useTranslation } from '../utils/i18n';
 import { generateProof, generateUserSecret, computeCommitment, formatProofForContract } from '../utils/zkProof';
 import * as snarkjs from 'snarkjs';
@@ -142,10 +143,12 @@ export function WhistleblowerPortal({
     const severityRewards: Record<string, number> = { low: 100, medium: 250, high: 500, critical: 1000 };
     const rewardAmount = severityRewards[reportForm.severity] || 100;
 
+    const web3 = getWeb3State();
     const newReport = {
       id: `RPT-${Date.now()}`,
       ...reportForm,
       isAnonymous: true,
+      reporterAddress: web3.account || null,
       zkProof: proofHash,
       zkpVerified: zkpReal,
       status: 'submitted',
@@ -315,7 +318,24 @@ export function WhistleblowerPortal({
     ));
   };
 
-  const handleUpdateInvestigation = (reportId: string, newStatus: string) => {
+  const [rewardingReportId, setRewardingReportId] = useState<string | null>(null);
+
+  const handleUpdateInvestigation = async (reportId: string, newStatus: string) => {
+    const report = reports.find((r) => r.id === reportId);
+    if (!report) return;
+
+    // If resolving and reward is due, try on-chain payment
+    if (newStatus === 'resolved' && report.rewards && report.reporterAddress) {
+      setRewardingReportId(reportId);
+      try {
+        await payWhistleblowerReward(report.reporterAddress, report.rewards.amount, reportId);
+        console.log(`[Reward] ${report.rewards.amount} PROC paid on-chain to ${report.reporterAddress}`);
+      } catch (err: any) {
+        console.warn('[Reward] On-chain payment failed, marking as awarded locally:', err?.reason || err?.message);
+      }
+      setRewardingReportId(null);
+    }
+
     const updatedReports = reports.map((r) => {
       if (r.id !== reportId) return r;
       const updated = { ...r, investigationStatus: newStatus };
@@ -905,13 +925,16 @@ export function WhistleblowerPortal({
                         <span style={{ fontSize: 13, color: '#065f46', flex: 1 }}>{t('whistleblower.investigationRequired')}</span>
                         <button
                           onClick={() => handleUpdateInvestigation(report.id, 'resolved')}
+                          disabled={rewardingReportId === report.id}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700,
                             color: '#fff', background: '#059669', border: 'none', borderRadius: 8,
-                            padding: '7px 14px', cursor: 'pointer',
+                            padding: '7px 14px', cursor: rewardingReportId === report.id ? 'wait' : 'pointer',
+                            opacity: rewardingReportId === report.id ? 0.7 : 1,
                           }}
                         >
-                          {t('whistleblower.markResolved')}
+                          {rewardingReportId === report.id ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : null}
+                          {rewardingReportId === report.id ? t('whistleblower.payingReward') : t('whistleblower.markResolved')}
                         </button>
                       </div>
                     )}

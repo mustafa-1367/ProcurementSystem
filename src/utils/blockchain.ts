@@ -2,7 +2,7 @@
 // with in-memory simulation fallback when wallet is not connected.
 
 import { getWeb3State } from './web3Provider';
-import { id as keccak256 } from 'ethers';
+import { id as keccak256, parseUnits, formatUnits } from 'ethers';
 import type { Contract } from 'ethers';
 
 export interface Block {
@@ -364,6 +364,42 @@ export async function addProcurementRecordAsync(
 
   // Fallback: use simulation
   return addProcurementRecord(type, data);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ProcToken — balance & reward payment
+// ═══════════════════════════════════════════════════════════════════════
+
+export async function getTokenBalance(address: string): Promise<string> {
+  const { tokenContract } = getWeb3State();
+  if (!tokenContract) return '0';
+  try {
+    const raw = await tokenContract.balanceOf(address);
+    return formatUnits(raw, 18);
+  } catch {
+    return '0';
+  }
+}
+
+export async function payWhistleblowerReward(
+  recipientAddress: string,
+  amount: number,
+  reportId: string
+): Promise<{ txHash: string; success: boolean; onChain: boolean }> {
+  const { tokenContract } = getWeb3State();
+  if (!tokenContract) {
+    return { txHash: '', success: false, onChain: false };
+  }
+  try {
+    const amountWei = parseUnits(String(amount), 18);
+    const tx = await tokenContract.payReward(recipientAddress, amountWei, `Whistleblower reward: ${reportId}`);
+    const receipt = await tx.wait();
+    console.log(`[ProcToken] Reward paid: ${amount} PROC to ${recipientAddress} for ${reportId}`);
+    return { txHash: receipt.hash, success: true, onChain: true };
+  } catch (err: any) {
+    console.error('[ProcToken] payReward failed:', err?.reason || err?.message);
+    throw err;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

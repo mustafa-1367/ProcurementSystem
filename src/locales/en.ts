@@ -615,6 +615,7 @@ export const en = {
     simulatedFlowDesc: 'Reporter anonymity is cryptographically protected using zero-knowledge proofs. Evidence encryption and token rewards are simulated in this prototype.',
     startInvestigation: 'Start Investigation',
     markResolved: 'Mark Resolved & Release Reward',
+    payingReward: 'Paying Reward...',
     investigationRequired: 'Investigation must be completed before rewards are released',
   },
 
