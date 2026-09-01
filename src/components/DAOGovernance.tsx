@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Users, Vote, AlertCircle, CheckCircle, XCircle, MessageSquare, TrendingUp, Shield, Upload, FileText, Image, Video, X, Scale } from 'lucide-react';
+import { Users, Vote, AlertCircle, CheckCircle, XCircle, MessageSquare, TrendingUp, Shield, Upload, FileText, Image, Video, X, Scale, Plus, Gavel } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { useWeb3 } from '../utils/useWeb3';
@@ -34,9 +34,15 @@ export function DAOGovernance({
     evidence: '',
   });
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; type: string; size: number; url: string }[]>([]);
+  const [complaintFiles, setComplaintFiles] = useState<{ name: string; type: string; size: number; url: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const complaintFileRef = useRef<HTMLInputElement>(null);
   const [userVotes, setUserVotes] = useState<{ [key: string]: 'approve' | 'reject' }>({});
   const [activePanel, setActivePanel] = useState<'disputes' | 'oversight'>('disputes');
+  const [disputeSuccess, setDisputeSuccess] = useState<{ id: string; onChain: boolean; txHash: string } | null>(null);
+  const [complaintSuccess, setComplaintSuccess] = useState<{ id: string; onChain: boolean; txHash: string } | null>(null);
+  const [submittingDispute, setSubmittingDispute] = useState(false);
+  const [submittingComplaint, setSubmittingComplaint] = useState(false);
   const [committeeMembers, setCommitteeMembers] = useState<string[]>([]);
   const [memberInput, setMemberInput] = useState('');
   const [complaintForm, setComplaintForm] = useState<{
@@ -75,6 +81,23 @@ export function DAOGovernance({
     });
   };
 
+  const handleComplaintFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newFiles = Array.from(files).map((file) => ({
+      name: file.name, type: file.type, size: file.size, url: URL.createObjectURL(file),
+    }));
+    setComplaintFiles((prev) => [...prev, ...newFiles]);
+    if (complaintFileRef.current) complaintFileRef.current.value = '';
+  };
+
+  const removeComplaintFile = (index: number) => {
+    setComplaintFiles((prev) => {
+      URL.revokeObjectURL(prev[index].url);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const getFileIcon = (type: string) => {
     if (type.startsWith('image/')) return <Image className="w-5 h-5 text-green-600" />;
     if (type.startsWith('video/')) return <Video className="w-5 h-5 text-purple-600" />;
@@ -90,6 +113,8 @@ export function DAOGovernance({
 
   const handleCreateDispute = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingDispute) return;
+    setSubmittingDispute(true);
 
     const newDispute = {
       id: `DSP-${Date.now()}`,
@@ -141,6 +166,8 @@ export function DAOGovernance({
       evidence: '',
     });
     setUploadedFiles([]);
+    setSubmittingDispute(false);
+    setDisputeSuccess({ id: newDispute.id, onChain, txHash: contract.transactionHash || '' });
   };
 
   const castVote = async (disputeId: string, vote: 'approve' | 'reject') => {
@@ -220,7 +247,8 @@ export function DAOGovernance({
 
   const handleSubmitComplaint = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (committeeMembers.length < 3) return;
+    if (committeeMembers.length < 3 || submittingComplaint) return;
+    setSubmittingComplaint(true);
 
     const newComplaint = {
       id: `CMP-${Date.now()}`,
@@ -258,6 +286,9 @@ export function DAOGovernance({
 
     setDisputes([...disputes, newComplaint]);
     setComplaintForm({ title: '', description: '', relatedId: '', level: '', evidence: '', sourceReportId: '' });
+    setComplaintFiles([]);
+    setSubmittingComplaint(false);
+    setComplaintSuccess({ id: newComplaint.id, onChain, txHash: contract.transactionHash || '' });
   };
 
   const handleMarkComplaint = async (complaintId: string, valid: boolean) => {
@@ -307,10 +338,16 @@ export function DAOGovernance({
         </div>
         <button
           onClick={() => setShowCreateDispute(!showCreateDispute)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: showCreateDispute ? '#dc2626' : '#0f2942', color: '#fff',
+            padding: '9px 18px', borderRadius: 10, border: 'none',
+            fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+            transition: 'all .15s',
+          }}
         >
-          <AlertCircle className="w-5 h-5" />
-          {t('dao.raiseDispute')}
+          {showCreateDispute ? <X style={{ width: 18, height: 18 }} /> : <Plus style={{ width: 18, height: 18 }} />}
+          {showCreateDispute ? t('dao.cancel') : t('dao.raiseDispute')}
         </button>
       </div>
 
@@ -457,28 +494,43 @@ export function DAOGovernance({
           </div>
 
           {/* Submit Complaint Form */}
-          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-            <h3 className="text-gray-900 mb-4 font-semibold">{t('dao.submitComplaint')}</h3>
-            <form onSubmit={handleSubmitComplaint} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+          <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,.06)', overflow: 'hidden' }}>
+            {/* Form Header */}
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #0f2942, #1e4976)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MessageSquare style={{ width: 18, height: 18, color: '#c99a3c' }} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f2942' }}>{t('dao.submitComplaint')}</h3>
+                <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>{t('dao.oversightDesc')}</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmitComplaint} style={{ padding: '24px 28px 28px' }}>
+              {/* Row 1: 3-column grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18, marginBottom: 18 }}>
                 <div>
-                  <label className="block text-gray-700 text-sm mb-2">{t('dao.complaintTitle')}</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.complaintTitle')}</label>
                   <input
                     type="text"
                     required
                     value={complaintForm.title}
                     onChange={(e) => setComplaintForm({ ...complaintForm, title: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: '#1f2937', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                     placeholder={t('dao.complaintPlaceholder')}
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 text-sm mb-2">{t('dao.disputeLevel')}</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.disputeLevel')}</label>
                   <select
                     required
                     value={complaintForm.level}
                     onChange={(e) => setComplaintForm({ ...complaintForm, level: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: complaintForm.level ? '#1f2937' : '#9ca3af', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                   >
                     <option value="">{t('dao.selectLevel')}</option>
                     <option value="central_npa">{t('dao.centralNPA')}</option>
@@ -486,11 +538,13 @@ export function DAOGovernance({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-700 text-sm mb-2">{t('dao.relatedTender')}</label>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.relatedTender')}</label>
                   <select
                     value={complaintForm.relatedId}
                     onChange={(e) => setComplaintForm({ ...complaintForm, relatedId: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: complaintForm.relatedId ? '#1f2937' : '#9ca3af', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                   >
                     <option value="">{t('dao.selectTender')}</option>
                     {tenders.map((td) => (
@@ -502,8 +556,8 @@ export function DAOGovernance({
 
               {/* Related Whistleblower Report */}
               {whistleblowerReports.length > 0 && (
-                <div>
-                  <label className="block text-gray-700 text-sm mb-2">{t('dao.relatedReport')}</label>
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.relatedReport')}</label>
                   <select
                     value={complaintForm.sourceReportId || ''}
                     onChange={(e) => {
@@ -516,7 +570,9 @@ export function DAOGovernance({
                         ...(report?.relatedId && !complaintForm.relatedId ? { relatedId: report.relatedId } : {}),
                       });
                     }}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: complaintForm.sourceReportId ? '#1f2937' : '#9ca3af', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                   >
                     <option value="">{t('dao.selectReport')}</option>
                     {whistleblowerReports.map((r: any) => (
@@ -526,34 +582,100 @@ export function DAOGovernance({
                 </div>
               )}
 
-              <div>
-                <label className="block text-gray-700 text-sm mb-2">{t('dao.complaintDescription')}</label>
+              {/* Description */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.complaintDescription')}</label>
                 <textarea
                   required
                   value={complaintForm.description}
                   onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows={4}
+                  style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: '#1f2937', background: '#fff', outline: 'none', resize: 'vertical', fontFamily: 'inherit', transition: 'border-color .15s' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                   placeholder={t('dao.complaintDescPlaceholder')}
                 />
               </div>
-              <div>
-                <label className="block text-gray-700 text-sm mb-2">{t('dao.complaintEvidence')}</label>
-                <textarea
-                  value={complaintForm.evidence}
-                  onChange={(e) => setComplaintForm({ ...complaintForm, evidence: e.target.value })}
-                  rows={2}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={t('dao.complaintEvidencePlaceholder')}
+
+              {/* Divider */}
+              <div style={{ height: 1, background: '#f3f4f6', margin: '0 0 18px' }} />
+
+              {/* File Upload — flat, no wrapper box */}
+              <div style={{ marginBottom: 22 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 8 }}>{t('dao.uploadEvidence')}</label>
+                <input
+                  ref={complaintFileRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,image/*,video/*"
+                  onChange={handleComplaintFileUpload}
+                  style={{ display: 'none' }}
                 />
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => complaintFileRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); complaintFileRef.current?.click(); } }}
+                  style={{
+                    border: '2px dashed #d1d5db', borderRadius: 10, padding: '24px 16px',
+                    textAlign: 'center', cursor: 'pointer', background: '#fafbfc',
+                    transition: 'border-color .2s, background .2s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#93c5fd'; e.currentTarget.style.background = '#eff6ff'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.background = '#fafbfc'; }}
+                >
+                  <Upload style={{ width: 26, height: 26, color: '#9ca3af', margin: '0 auto 6px' }} />
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#4b5563' }}>{t('dao.clickToUpload')}</p>
+                  <p style={{ margin: '3px 0 0', fontSize: 11, color: '#9ca3af' }}>{t('dao.uploadHint')}</p>
+                </div>
+
+                {complaintFiles.length > 0 && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {complaintFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {getFileIcon(file.type)}
+                          <div>
+                            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2937' }}>{file.name}</p>
+                            <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{formatFileSize(file.size)}</p>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {file.type.startsWith('image/') && (
+                            <img src={file.url} alt={file.name} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeComplaintFile(index)}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2 }}
+                          >
+                            <X style={{ width: 16, height: 16 }} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Submit */}
               <button
                 type="submit"
-                disabled={committeeMembers.length < 3}
-                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={committeeMembers.length < 3 || submittingComplaint}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  background: (committeeMembers.length < 3 || submittingComplaint) ? '#d1d5db' : 'linear-gradient(135deg, #0f2942, #1a3d5c)',
+                  color: '#fff', padding: '11px 28px', borderRadius: 10, border: 'none',
+                  fontSize: 14, fontWeight: 700, letterSpacing: '0.01em',
+                  cursor: (committeeMembers.length < 3 || submittingComplaint) ? 'not-allowed' : 'pointer',
+                  transition: 'all .2s', boxShadow: (committeeMembers.length < 3 || submittingComplaint) ? 'none' : '0 2px 8px rgba(15,41,66,.25)',
+                }}
               >
-                <Shield className="w-5 h-5" />
-                {t('dao.submitComplaint')}
+                <Shield style={{ width: 16, height: 16 }} />
+                {submittingComplaint ? t('dao.submitting') : t('dao.submitComplaint')}
               </button>
             </form>
           </div>
@@ -728,76 +850,90 @@ export function DAOGovernance({
       {activePanel === 'disputes' && <>
       {/* DAO Statistics */}
       <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600">{t('dao.activeVotes')}</p>
-              <p className="text-gray-900 mt-1">{activeDisputes.length}</p>
-            </div>
-            <Vote className="w-8 h-8 text-blue-600" />
+        <div style={{ background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe', padding: '20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Vote style={{ width: 20, height: 20, color: '#2563eb' }} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#2563eb' }}>{t('dao.activeVotes')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 800, color: '#1e3a5f' }}>{activeDisputes.length}</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600">{t('dao.resolved')}</p>
-              <p className="text-gray-900 mt-1">{resolvedDisputes.length}</p>
-            </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
+        <div style={{ background: '#ecfdf5', borderRadius: 12, border: '1px solid #a7f3d0', padding: '20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <CheckCircle style={{ width: 20, height: 20, color: '#059669' }} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#059669' }}>{t('dao.resolved')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 800, color: '#1e3a5f' }}>{resolvedDisputes.length}</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600">{t('dao.participationRate')}</p>
-              <p className="text-gray-900 mt-1">
-                {disputes.length > 0
-                  ? Math.round((disputes.reduce((sum, d) => sum + (d.votes?.totalVoters || 0), 0) / disputes.length))
-                  : 0}
-              </p>
-            </div>
-            <TrendingUp className="w-8 h-8 text-purple-600" />
+        <div style={{ background: '#faf5ff', borderRadius: 12, border: '1px solid #e9d5ff', padding: '20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <TrendingUp style={{ width: 20, height: 20, color: '#7c3aed' }} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#7c3aed' }}>{t('dao.participationRate')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 800, color: '#1e3a5f' }}>
+              {disputes.length > 0
+                ? Math.round((disputes.reduce((sum, d) => sum + (d.votes?.totalVoters || 0), 0) / disputes.length))
+                : 0}
+            </p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600">{t('dao.daoMembers')}</p>
-              <p className="text-gray-900 mt-1">{connected && isCorrectNetwork ? '1 (You)' : 'Connect Wallet'}</p>
-            </div>
-            <Users className="w-8 h-8 text-yellow-600" />
+        <div style={{ background: '#fefce8', borderRadius: 12, border: '1px solid #fde68a', padding: '20px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#fef9c3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Users style={{ width: 20, height: 20, color: '#ca8a04' }} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#ca8a04' }}>{t('dao.daoMembers')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 800, color: '#1e3a5f' }}>{connected && isCorrectNetwork ? '1 (You)' : 'Connect Wallet'}</p>
           </div>
         </div>
       </div>
 
       {/* Create Dispute Form */}
       {showCreateDispute && (
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-          <h3 className="text-gray-900 mb-4">{t('dao.raiseNewDispute')}</h3>
-          <form onSubmit={handleCreateDispute} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 1px 4px rgba(0,0,0,.06)', overflow: 'hidden' }}>
+          {/* Form Header */}
+          <div style={{ padding: '18px 24px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #0f2942, #1e4976)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Gavel style={{ width: 18, height: 18, color: '#c99a3c' }} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f2942' }}>{t('dao.raiseNewDispute')}</h3>
+              <p style={{ margin: 0, fontSize: 12, color: '#9ca3af' }}>{t('dao.subtitle')}</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateDispute} style={{ padding: '24px 28px 28px' }}>
+            {/* Row 1: 3-column grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18, marginBottom: 18 }}>
               <div>
-                <label className="block text-gray-700 mb-2">{t('dao.disputeTitle')}</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.disputeTitle')}</label>
                 <input
                   type="text"
                   required
                   value={disputeForm.title}
                   onChange={(e) => setDisputeForm({ ...disputeForm, title: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: '#1f2937', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                   placeholder={t('dao.titlePlaceholder')}
                 />
               </div>
-
               <div>
-                <label className="block text-gray-700 mb-2">{t('dao.disputeType')}</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.disputeType')}</label>
                 <select
                   required
                   value={disputeForm.type}
                   onChange={(e) => setDisputeForm({ ...disputeForm, type: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: disputeForm.type ? '#1f2937' : '#9ca3af', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                 >
                   <option value="">{t('dao.selectType')}</option>
                   <option value="contract_violation">{t('dao.contractViolation')}</option>
@@ -807,14 +943,15 @@ export function DAOGovernance({
                   <option value="fraud_allegation">{t('dao.fraudAllegation')}</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-gray-700 mb-2">{t('dao.relatedTender')}</label>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.relatedTender')}</label>
                 <select
                   required
                   value={disputeForm.relatedId}
                   onChange={(e) => setDisputeForm({ ...disputeForm, relatedId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  style={{ width: '100%', padding: '9px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: disputeForm.relatedId ? '#1f2937' : '#9ca3af', background: '#fff', outline: 'none', transition: 'border-color .15s' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                 >
                   <option value="">{t('dao.selectTender')}</option>
                   {tenders.map((td) => (
@@ -827,31 +964,27 @@ export function DAOGovernance({
               </div>
             </div>
 
-            <div>
-              <label className="block text-gray-700 mb-2">{t('dao.detailedDescription')}</label>
+            {/* Description */}
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 7 }}>{t('dao.detailedDescription')}</label>
               <textarea
                 required
                 value={disputeForm.description}
                 onChange={(e) => setDisputeForm({ ...disputeForm, description: e.target.value })}
                 rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #e5e7eb', borderRadius: 9, fontSize: 13, color: '#1f2937', background: '#fff', outline: 'none', resize: 'vertical', fontFamily: 'inherit', transition: 'border-color .15s' }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = '#60a5fa'; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e7eb'; }}
                 placeholder={t('dao.descriptionPlaceholder')}
               />
             </div>
 
-            <div>
-              <label className="block text-gray-700 mb-2">{t('dao.evidenceDocumentation')}</label>
-              <textarea
-                value={disputeForm.evidence}
-                onChange={(e) => setDisputeForm({ ...disputeForm, evidence: e.target.value })}
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={t('dao.evidencePlaceholder')}
-              />
-            </div>
+            {/* Divider */}
+            <div style={{ height: 1, background: '#f3f4f6', margin: '0 0 18px' }} />
 
-            <div>
-              <label className="block text-gray-700 mb-2">{t('dao.uploadEvidence')}</label>
+            {/* File Upload — flat, no wrapper box */}
+            <div style={{ marginBottom: 22 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1f2937', marginBottom: 8 }}>{t('dao.uploadEvidence')}</label>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -865,57 +998,79 @@ export function DAOGovernance({
                 tabIndex={0}
                 onClick={() => fileInputRef.current?.click()}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
-                className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors"
+                style={{
+                  border: '2px dashed #d1d5db', borderRadius: 10, padding: '24px 16px',
+                  textAlign: 'center', cursor: 'pointer', background: '#fafbfc',
+                  transition: 'border-color .2s, background .2s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#93c5fd'; e.currentTarget.style.background = '#eff6ff'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.background = '#fafbfc'; }}
               >
-                <Upload className="w-10 h-10 text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-700 font-medium">{t('dao.clickToUpload')}</p>
-                <p className="text-gray-600 text-sm mt-1">
-                  {t('dao.uploadHint')}
-                </p>
+                <Upload style={{ width: 26, height: 26, color: '#9ca3af', margin: '0 auto 6px' }} />
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#4b5563' }}>{t('dao.clickToUpload')}</p>
+                <p style={{ margin: '3px 0 0', fontSize: 11, color: '#9ca3af' }}>{t('dao.uploadHint')}</p>
               </div>
 
               {uploadedFiles.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {uploadedFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-4 py-3"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px' }}
                     >
-                      <div className="flex items-center gap-3">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {getFileIcon(file.type)}
                         <div>
-                          <p className="text-gray-800 text-sm font-medium">{file.name}</p>
-                          <p className="text-gray-600 text-xs">{formatFileSize(file.size)}</p>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#1f2937' }}>{file.name}</p>
+                          <p style={{ margin: 0, fontSize: 11, color: '#9ca3af' }}>{formatFileSize(file.size)}</p>
                         </div>
                       </div>
-                      {file.type.startsWith('image/') && (
-                        <img src={file.url} alt={file.name} className="w-12 h-12 object-cover rounded" />
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeFile(index)}
-                        className="text-red-500 hover:text-red-700 ml-3"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {file.type.startsWith('image/') && (
+                          <img src={file.url} alt={file.name} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 2 }}
+                        >
+                          <X style={{ width: 16, height: 16 }} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            <div className="flex gap-3">
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 type="submit"
-                className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={submittingDispute}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  background: submittingDispute ? '#d1d5db' : 'linear-gradient(135deg, #0f2942, #1a3d5c)',
+                  color: '#fff', padding: '11px 28px', borderRadius: 10, border: 'none',
+                  fontSize: 14, fontWeight: 700, letterSpacing: '0.01em',
+                  cursor: submittingDispute ? 'not-allowed' : 'pointer',
+                  transition: 'all .2s', boxShadow: submittingDispute ? 'none' : '0 2px 8px rgba(15,41,66,.25)',
+                }}
               >
-                <Shield className="w-5 h-5" />
-                {t('dao.submitToDAO')}
+                <Shield style={{ width: 16, height: 16 }} />
+                {submittingDispute ? t('dao.submitting') : t('dao.submitToDAO')}
               </button>
               <button
                 type="button"
                 onClick={() => setShowCreateDispute(false)}
-                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                style={{
+                  padding: '11px 22px', borderRadius: 10,
+                  border: '1.5px solid #e5e7eb', background: '#fff', color: '#4b5563',
+                  fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                  transition: 'all .15s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.borderColor = '#d1d5db'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e5e7eb'; }}
               >
                 {t('dao.cancel')}
               </button>
@@ -1153,6 +1308,100 @@ export function DAOGovernance({
         </div>
       </div>
       </>}
+
+      {/* Dispute Success Modal */}
+      {disputeSuccess && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.45)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '32px 28px 24px', maxWidth: 440, width: '92%', boxShadow: '0 20px 60px rgba(0,0,0,.2)', position: 'relative' }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <CheckCircle style={{ width: 28, height: 28, color: '#059669' }} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f2942' }}>{t('dao.disputeSubmitted')}</h3>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: '#6b7280' }}>{t('dao.disputeSubmittedDesc')}</p>
+            </div>
+            <div style={{ background: '#f9fafb', borderRadius: 10, padding: '14px 16px', marginBottom: 16, fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.disputeId')}</span>
+                <span style={{ color: '#0f2942', fontWeight: 700, fontFamily: 'monospace' }}>{disputeSuccess.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.blockchainStatus')}</span>
+                <span style={{ color: disputeSuccess.onChain ? '#059669' : '#d97706', fontWeight: 700 }}>
+                  {disputeSuccess.onChain ? t('dao.onChainConfirmed') : t('dao.simulatedRecord')}
+                </span>
+              </div>
+              {disputeSuccess.txHash && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.txHash')}</span>
+                  <span style={{ color: '#0f2942', fontWeight: 600, fontFamily: 'monospace', fontSize: 11 }}>{disputeSuccess.txHash.slice(0, 10)}...{disputeSuccess.txHash.slice(-6)}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#0f2942', marginBottom: 8 }}>{t('dao.nextSteps')}</p>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#4b5563', lineHeight: 1.8 }}>
+                <li>{t('dao.disputeNextStep1')}</li>
+                <li>{t('dao.disputeNextStep2')}</li>
+                <li>{t('dao.disputeNextStep3')}</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => setDisputeSuccess(null)}
+              style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', background: '#0f2942', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              {t('dao.done')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Complaint Success Modal */}
+      {complaintSuccess && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.45)' }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '32px 28px 24px', maxWidth: 440, width: '92%', boxShadow: '0 20px 60px rgba(0,0,0,.2)', position: 'relative' }}>
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <CheckCircle style={{ width: 28, height: 28, color: '#059669' }} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f2942' }}>{t('dao.complaintSubmitted')}</h3>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: '#6b7280' }}>{t('dao.complaintSubmittedDesc')}</p>
+            </div>
+            <div style={{ background: '#f9fafb', borderRadius: 10, padding: '14px 16px', marginBottom: 16, fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.complaintId')}</span>
+                <span style={{ color: '#0f2942', fontWeight: 700, fontFamily: 'monospace' }}>{complaintSuccess.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.blockchainStatus')}</span>
+                <span style={{ color: complaintSuccess.onChain ? '#059669' : '#d97706', fontWeight: 700 }}>
+                  {complaintSuccess.onChain ? t('dao.onChainConfirmed') : t('dao.simulatedRecord')}
+                </span>
+              </div>
+              {complaintSuccess.txHash && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.txHash')}</span>
+                  <span style={{ color: '#0f2942', fontWeight: 600, fontFamily: 'monospace', fontSize: 11 }}>{complaintSuccess.txHash.slice(0, 10)}...{complaintSuccess.txHash.slice(-6)}</span>
+                </div>
+              )}
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#0f2942', marginBottom: 8 }}>{t('dao.nextSteps')}</p>
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#4b5563', lineHeight: 1.8 }}>
+                <li>{t('dao.complaintNextStep1')}</li>
+                <li>{t('dao.complaintNextStep2')}</li>
+                <li>{t('dao.complaintNextStep3')}</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => setComplaintSuccess(null)}
+              style={{ width: '100%', padding: '10px 0', borderRadius: 10, border: 'none', background: '#0f2942', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              {t('dao.done')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
