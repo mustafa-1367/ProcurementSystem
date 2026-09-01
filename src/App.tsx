@@ -976,21 +976,21 @@ function AppContent() {
               </h3>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
-                  onClick={() => setPendingHighContrast(false)}
+                  onClick={() => { setPendingHighContrast(false); setPendingDarkMode(false); }}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
-                    border: !pendingHighContrast ? '2px solid #059669' : '1.5px solid #d1d5db',
-                    background: !pendingHighContrast ? '#ecfdf5' : '#fff',
+                    border: !pendingHighContrast && !pendingDarkMode ? '2px solid #059669' : '1.5px solid #d1d5db',
+                    background: !pendingHighContrast && !pendingDarkMode ? '#ecfdf5' : '#fff',
                   }}
                 >
                   <div style={{
                     width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                    border: `2px solid ${!pendingHighContrast ? '#059669' : '#d1d5db'}`,
-                    background: !pendingHighContrast ? '#059669' : 'transparent',
+                    border: `2px solid ${!pendingHighContrast && !pendingDarkMode ? '#059669' : '#d1d5db'}`,
+                    background: !pendingHighContrast && !pendingDarkMode ? '#059669' : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {!pendingHighContrast && (
+                    {!pendingHighContrast && !pendingDarkMode && (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
@@ -999,7 +999,7 @@ function AppContent() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#0f2942' }}>{t('a11y.defaultSettings')}</span>
                 </button>
                 <button
-                  onClick={() => setPendingHighContrast(true)}
+                  onClick={() => { setPendingHighContrast(true); setPendingDarkMode(false); }}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
@@ -1028,7 +1028,7 @@ function AppContent() {
                 Dark Mode
               </h3>
               <button
-                onClick={() => setPendingDarkMode(!pendingDarkMode)}
+                onClick={() => { const next = !pendingDarkMode; setPendingDarkMode(next); if (next) setPendingHighContrast(false); }}
                 style={{
                   width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                   padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
