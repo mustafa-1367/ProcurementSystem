@@ -486,10 +486,10 @@ export function WhistleblowerPortal({
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
                   >
                     <option value="">{t('whistleblower.selectSeverity')}</option>
-                    <option value="low">{t('whistleblower.low')} — 100 PROC</option>
-                    <option value="medium">{t('whistleblower.medium')} — 250 PROC</option>
-                    <option value="high">{t('whistleblower.high')} — 500 PROC</option>
-                    <option value="critical">{t('whistleblower.critical')} — 1,000 PROC</option>
+                    <option value="low">{t('whistleblower.low')}</option>
+                    <option value="medium">{t('whistleblower.medium')}</option>
+                    <option value="high">{t('whistleblower.high')}</option>
+                    <option value="critical">{t('whistleblower.critical')}</option>
                   </select>
                   {reportForm.severity && (
                     <p style={{ margin: '6px 0 0', fontSize: 11, color: '#059669', fontWeight: 600 }}>
