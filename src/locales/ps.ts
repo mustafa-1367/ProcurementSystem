@@ -562,6 +562,8 @@ export const ps = {
     evidenceLabel: 'شواهد:',
     rewardEligible: 'د څیړنې پایلو پر بنسټ د خبرورکوونکي پاداش لپاره وړ',
     rewardPendingInvestigation: 'پاداش پاتې دی — د څیړنې له بشپړیدو وروسته به خوشې شي',
+    rewardHint: 'تاسو به د څیړنې له بشپړیدو وروسته {{amount}} PROC توکنونه ترلاسه کړئ',
+    rewardLabel: 'پاداش',
     rewardAwarded: 'پاداش ستاسو بټوې ته واستول شو!',
     rewardForSeverity: 'د شدت کچې پر بنسټ پاداش:',
     rewardReceived: 'پاداش ترلاسه شو',
@@ -603,7 +605,6 @@ export const ps = {
     simulatedFlowDesc: 'د راپور ورکوونکي ناشناسي د صفر پوهې ثبوتونو په کریپټوګرافیکي ډول خوندي شوې. د شواهدو رمزنګاري او د ټوکنو پاداشونه پدې نمونه کې شبیه‌سازي شوي.',
     startInvestigation: 'تحقیق پیل کړئ',
     markResolved: 'حل شوی او پاداش خوشې کړئ',
-    payingReward: 'د پاداش تادیه...',
     investigationRequired: 'د پاداشونو خوشې کولو دمخه تحقیق باید بشپړ شي',
   },
 

@@ -572,6 +572,8 @@ export const en = {
     evidenceLabel: 'Evidence:',
     rewardEligible: 'Eligible for whistleblower reward based on investigation outcome',
     rewardPendingInvestigation: 'Reward pending — will be released after investigation is completed',
+    rewardHint: 'You will earn {{amount}} PROC tokens upon investigation completion',
+    rewardLabel: 'Reward',
     rewardAwarded: 'Reward credited to your wallet!',
     rewardForSeverity: 'Reward based on severity level:',
     rewardReceived: 'Reward received',
@@ -615,7 +617,6 @@ export const en = {
     simulatedFlowDesc: 'Reporter anonymity is cryptographically protected using zero-knowledge proofs. Evidence encryption and token rewards are simulated in this prototype.',
     startInvestigation: 'Start Investigation',
     markResolved: 'Mark Resolved & Release Reward',
-    payingReward: 'Paying Reward...',
     investigationRequired: 'Investigation must be completed before rewards are released',
   },
 

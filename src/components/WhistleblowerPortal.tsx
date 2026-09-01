@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { AlertTriangle, Shield, Eye, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2 } from 'lucide-react';
-import { addProcurementRecordAsync, blockchain, payWhistleblowerReward } from '../utils/blockchain';
-import { getWeb3State } from '../utils/web3Provider';
+import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { generateProof, generateUserSecret, computeCommitment, formatProofForContract } from '../utils/zkProof';
 import * as snarkjs from 'snarkjs';
@@ -93,7 +92,7 @@ export function WhistleblowerPortal({
   const [zkpGenerating, setZkpGenerating] = useState(false);
   const [submitStep, setSubmitStep] = useState<string | null>(null); // progress step label
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState<{ reportId: string; txHash: string; onChain: boolean; zkpVerified: boolean } | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<{ reportId: string; txHash: string; onChain: boolean; zkpVerified: boolean; rewardAmount: number } | null>(null);
 
   const handleSubmitReport = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,12 +142,10 @@ export function WhistleblowerPortal({
     const severityRewards: Record<string, number> = { low: 100, medium: 250, high: 500, critical: 1000 };
     const rewardAmount = severityRewards[reportForm.severity] || 100;
 
-    const web3 = getWeb3State();
     const newReport = {
       id: `RPT-${Date.now()}`,
       ...reportForm,
       isAnonymous: true,
-      reporterAddress: web3.account || null,
       zkProof: proofHash,
       zkpVerified: zkpReal,
       status: 'submitted',
@@ -209,6 +206,7 @@ export function WhistleblowerPortal({
         txHash: contract.transactionHash,
         onChain,
         zkpVerified: zkpReal,
+        rewardAmount,
       });
 
       // Reset form (but keep success visible)
@@ -318,24 +316,7 @@ export function WhistleblowerPortal({
     ));
   };
 
-  const [rewardingReportId, setRewardingReportId] = useState<string | null>(null);
-
-  const handleUpdateInvestigation = async (reportId: string, newStatus: string) => {
-    const report = reports.find((r) => r.id === reportId);
-    if (!report) return;
-
-    // If resolving and reward is due, try on-chain payment
-    if (newStatus === 'resolved' && report.rewards && report.reporterAddress) {
-      setRewardingReportId(reportId);
-      try {
-        await payWhistleblowerReward(report.reporterAddress, report.rewards.amount, reportId);
-        console.log(`[Reward] ${report.rewards.amount} PROC paid on-chain to ${report.reporterAddress}`);
-      } catch (err: any) {
-        console.warn('[Reward] On-chain payment failed, marking as awarded locally:', err?.reason || err?.message);
-      }
-      setRewardingReportId(null);
-    }
-
+  const handleUpdateInvestigation = (reportId: string, newStatus: string) => {
     const updatedReports = reports.map((r) => {
       if (r.id !== reportId) return r;
       const updated = { ...r, investigationStatus: newStatus };
@@ -505,11 +486,17 @@ export function WhistleblowerPortal({
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
                   >
                     <option value="">{t('whistleblower.selectSeverity')}</option>
-                    <option value="low">{t('whistleblower.low')}</option>
-                    <option value="medium">{t('whistleblower.medium')}</option>
-                    <option value="high">{t('whistleblower.high')}</option>
-                    <option value="critical">{t('whistleblower.critical')}</option>
+                    <option value="low">{t('whistleblower.low')} — 100 PROC</option>
+                    <option value="medium">{t('whistleblower.medium')} — 250 PROC</option>
+                    <option value="high">{t('whistleblower.high')} — 500 PROC</option>
+                    <option value="critical">{t('whistleblower.critical')} — 1,000 PROC</option>
                   </select>
+                  {reportForm.severity && (
+                    <p style={{ margin: '6px 0 0', fontSize: 11, color: '#059669', fontWeight: 600 }}>
+                      <Coins style={{ width: 12, height: 12, display: 'inline', verticalAlign: '-2px', marginRight: 4 }} />
+                      {t('whistleblower.rewardHint').replace('{{amount}}', { low: '100', medium: '250', high: '500', critical: '1,000' }[reportForm.severity] || '0')}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.reporterType')}</label>
@@ -737,6 +724,12 @@ export function WhistleblowerPortal({
                   {submitSuccess.onChain ? t('whistleblower.onChainConfirmed') : t('whistleblower.simulatedRecord')}
                 </span>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.rewardLabel')}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>
+                  {submitSuccess.rewardAmount.toLocaleString()} PROC
+                </span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.txHash')}</span>
                 <span style={{ fontSize: 11, color: '#0f2942', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{submitSuccess.txHash}</span>
@@ -925,16 +918,13 @@ export function WhistleblowerPortal({
                         <span style={{ fontSize: 13, color: '#065f46', flex: 1 }}>{t('whistleblower.investigationRequired')}</span>
                         <button
                           onClick={() => handleUpdateInvestigation(report.id, 'resolved')}
-                          disabled={rewardingReportId === report.id}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5, fontWeight: 700,
                             color: '#fff', background: '#059669', border: 'none', borderRadius: 8,
-                            padding: '7px 14px', cursor: rewardingReportId === report.id ? 'wait' : 'pointer',
-                            opacity: rewardingReportId === report.id ? 0.7 : 1,
+                            padding: '7px 14px', cursor: 'pointer',
                           }}
                         >
-                          {rewardingReportId === report.id ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : null}
-                          {rewardingReportId === report.id ? t('whistleblower.payingReward') : t('whistleblower.markResolved')}
+                          {t('whistleblower.markResolved')}
                         </button>
                       </div>
                     )}

@@ -562,6 +562,8 @@ export const fa = {
     evidenceLabel: 'شواهد:',
     rewardEligible: 'واجد شرایط دریافت پاداش گزارش‌دهنده بر اساس نتایج بررسی',
     rewardPendingInvestigation: 'پاداش در انتظار — پس از تکمیل بررسی آزاد خواهد شد',
+    rewardHint: 'شما پس از تکمیل بررسی {{amount}} توکن PROC دریافت خواهید کرد',
+    rewardLabel: 'پاداش',
     rewardAwarded: 'پاداش به کیف پول شما واریز شد!',
     rewardForSeverity: 'پاداش بر اساس سطح شدت:',
     rewardReceived: 'پاداش دریافت شد',
@@ -603,7 +605,6 @@ export const fa = {
     simulatedFlowDesc: 'ناشناسی گزارش‌دهنده به صورت رمزنگاری توسط اثبات دانش صفر محافظت می‌شود. رمزنگاری شواهد و پاداش‌های توکنی در این نمونه شبیه‌سازی شده‌اند.',
     startInvestigation: 'شروع تحقیق',
     markResolved: 'حل شده و آزادسازی پاداش',
-    payingReward: 'در حال پرداخت پاداش...',
     investigationRequired: 'تحقیق باید قبل از آزادسازی پاداش‌ها تکمیل شود',
   },
 
