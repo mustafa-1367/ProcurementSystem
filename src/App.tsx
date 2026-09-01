@@ -1056,7 +1056,7 @@ function AppContent() {
               {/* Action Buttons */}
               <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
                 <button
-                  onClick={() => { setPendingFontSizeIdx(1); setPendingHighContrast(false); setPendingDarkMode(false); }}
+                  onClick={() => { setFontSizeIdx(1); setHighContrast(false); setDarkMode(false); setPendingFontSizeIdx(1); setPendingHighContrast(false); setPendingDarkMode(false); setShowAccessibility(false); }}
                   style={{
                     flex: 1, padding: '11px 20px', borderRadius: 8,
                     border: '1.5px solid #1d4ed8', background: 'transparent',
