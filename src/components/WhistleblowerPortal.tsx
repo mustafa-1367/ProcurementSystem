@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Shield, Eye, EyeOff, Lock, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2 } from 'lucide-react';
+import { AlertTriangle, Shield, Eye, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2 } from 'lucide-react';
 import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { generateProof, generateUserSecret, computeCommitment, formatProofForContract } from '../utils/zkProof';
@@ -29,7 +29,6 @@ export function WhistleblowerPortal({
   userRole,
 }: WhistleblowerPortalProps) {
   const [showReportForm, setShowReportForm] = useState(false);
-  const [anonymousMode, setAnonymousMode] = useState(true);
   const [reportForm, setReportForm] = useState({
     title: '',
     category: '',
@@ -37,7 +36,6 @@ export function WhistleblowerPortal({
     relatedId: '',
     description: '',
     evidence: '',
-    contactMethod: '',
     reporterType: '',
     routedTo: '',
   });
@@ -147,7 +145,7 @@ export function WhistleblowerPortal({
     const newReport = {
       id: `RPT-${Date.now()}`,
       ...reportForm,
-      isAnonymous: anonymousMode,
+      isAnonymous: true,
       zkProof: proofHash,
       zkpVerified: zkpReal,
       status: 'submitted',
@@ -179,7 +177,7 @@ export function WhistleblowerPortal({
         zkProof: proofHash,
         category: reportForm.category,
         severity: reportForm.severity,
-        anonymous: anonymousMode,
+        anonymous: true,
         ...(proofData ? { proofData } : {}),
         ...(commitmentStr ? { commitment: commitmentStr } : {}),
       });
@@ -219,7 +217,6 @@ export function WhistleblowerPortal({
         relatedId: '',
         description: '',
         evidence: '',
-        contactMethod: '',
         reporterType: '',
         routedTo: '',
       });
@@ -416,34 +413,7 @@ export function WhistleblowerPortal({
                 <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,.6)' }}>{t('whistleblower.reportsProtected')}</p>
               </div>
             </div>
-            <button
-              onClick={() => setAnonymousMode(!anonymousMode)}
-              aria-pressed={anonymousMode}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px',
-                borderRadius: 8, border: anonymousMode ? '1.5px solid #c99a3c' : '1.5px solid rgba(255,255,255,.25)',
-                background: anonymousMode ? 'rgba(201,154,60,.15)' : 'rgba(255,255,255,.08)',
-                color: anonymousMode ? '#c99a3c' : 'rgba(255,255,255,.7)',
-                fontSize: 13, fontWeight: 700, cursor: 'pointer', transition: 'all .15s',
-              }}
-            >
-              {anonymousMode ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-              {anonymousMode ? t('whistleblower.anonymousMode') : t('whistleblower.identifiedMode')}
-            </button>
           </div>
-
-          {/* ZKP Banner */}
-          {anonymousMode && (
-            <div style={{ margin: '20px 28px 0', padding: '14px 18px', borderRadius: 10, background: 'linear-gradient(135deg, #ecfdf5, #f0fdf4)', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Lock style={{ width: 16, height: 16, color: '#059669' }} />
-              </div>
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#065f46' }}>{t('whistleblower.zkpActive')}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#047857' }}>{t('whistleblower.zkpDescription')}</p>
-              </div>
-            </div>
-          )}
 
           <form onSubmit={handleSubmitReport} style={{ padding: '20px 28px 28px' }}>
             {/* ── Section 1: Report Details ── */}
@@ -645,21 +615,6 @@ export function WhistleblowerPortal({
               )}
             </div>
 
-            {/* Secure Contact (non-anonymous only) */}
-            {!anonymousMode && (
-              <div style={{ marginBottom: 24 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>{t('whistleblower.secureContact')}</label>
-                <input
-                  type="text"
-                  value={reportForm.contactMethod}
-                  onChange={(e) => setReportForm({ ...reportForm, contactMethod: e.target.value })}
-                  placeholder={t('whistleblower.contactPlaceholder')}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', transition: 'border .15s', boxSizing: 'border-box' }}
-                  onFocus={(e) => { e.target.style.borderColor = '#c99a3c'; e.target.style.boxShadow = '0 0 0 3px rgba(201,154,60,.1)'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#d1d5db'; e.target.style.boxShadow = 'none'; }}
-                />
-              </div>
-            )}
 
             {/* Error Message */}
             {submitError && (
