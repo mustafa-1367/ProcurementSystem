@@ -508,6 +508,9 @@ export function WhistleblowerPortal({
                       let routedTo = '';
                       if (type === 'citizen') routedTo = 'directorate_contract_oversight';
                       if (type === 'company_supplier') routedTo = 'debarment_committee_npa';
+                      if (type === 'ngo_civil_society') routedTo = 'national_inspector';
+                      if (type === 'journalist_media') routedTo = 'ago';
+                      if (type === 'internal_auditor') routedTo = 'sao';
                       setReportForm({ ...reportForm, reporterType: type, routedTo });
                     }}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #d1d5db', fontSize: 13, outline: 'none', background: '#fff', cursor: 'pointer', boxSizing: 'border-box' }}
@@ -516,6 +519,9 @@ export function WhistleblowerPortal({
                     <option value="government_employee">{t('whistleblower.governmentEmployee')}</option>
                     <option value="citizen">{t('whistleblower.citizenReporter')}</option>
                     <option value="company_supplier">{t('whistleblower.companySupplier')}</option>
+                    <option value="ngo_civil_society">{t('whistleblower.ngoCivilSociety')}</option>
+                    <option value="journalist_media">{t('whistleblower.journalistMedia')}</option>
+                    <option value="internal_auditor">{t('whistleblower.internalAuditor')}</option>
                   </select>
                 </div>
                 {reportForm.reporterType === 'government_employee' ? (
