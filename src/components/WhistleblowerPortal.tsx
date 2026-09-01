@@ -1019,22 +1019,6 @@ export function WhistleblowerPortal({
         )}
       </div>
 
-      {/* Protection Info */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-        <div className="flex items-start gap-4">
-          <Shield className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
-          <div>
-            <h4 className="text-purple-900 mb-2">{t('whistleblower.protectionTitle')}</h4>
-            <ul className="text-purple-800 space-y-1">
-              <li>• {t('whistleblower.protectionZKP')}</li>
-              <li>• {t('whistleblower.protectionBlockchain')}</li>
-              <li>• {t('whistleblower.protectionIncentive')}</li>
-              <li>• {t('whistleblower.protectionMultichannel')}</li>
-              <li>• {t('whistleblower.protectionLegal')}</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
