@@ -3,6 +3,7 @@ import { Users, Vote, AlertCircle, CheckCircle, XCircle, MessageSquare, Trending
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { useWeb3 } from '../utils/useWeb3';
+import { TxHashLink } from './TxHashLink';
 
 interface DAOGovernanceProps {
   disputes: any[];
@@ -1332,9 +1333,9 @@ export function DAOGovernance({
                 </span>
               </div>
               {disputeSuccess.txHash && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.txHash')}</span>
-                  <span style={{ color: '#0f2942', fontWeight: 600, fontFamily: 'monospace', fontSize: 11 }}>{disputeSuccess.txHash.slice(0, 10)}...{disputeSuccess.txHash.slice(-6)}</span>
+                  <TxHashLink hash={disputeSuccess.txHash} truncate={18} />
                 </div>
               )}
             </div>
@@ -1379,9 +1380,9 @@ export function DAOGovernance({
                 </span>
               </div>
               {complaintSuccess.txHash && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#6b7280', fontWeight: 500 }}>{t('dao.txHash')}</span>
-                  <span style={{ color: '#0f2942', fontWeight: 600, fontFamily: 'monospace', fontSize: 11 }}>{complaintSuccess.txHash.slice(0, 10)}...{complaintSuccess.txHash.slice(-6)}</span>
+                  <TxHashLink hash={complaintSuccess.txHash} truncate={18} />
                 </div>
               )}
             </div>

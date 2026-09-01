@@ -3,6 +3,7 @@ import { AlertTriangle, Shield, Eye, Send, CheckCircle, Clock, MessageSquare, Up
 import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { generateProof, generateUserSecret, computeCommitment, formatProofForContract } from '../utils/zkProof';
+import { TxHashLink } from './TxHashLink';
 import * as snarkjs from 'snarkjs';
 
 interface WhistleblowerPortalProps {
@@ -731,9 +732,9 @@ export function WhistleblowerPortal({
                   {submitSuccess.rewardAmount.toLocaleString()} PROC
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('whistleblower.txHash')}</span>
-                <span style={{ fontSize: 11, color: '#0f2942', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{submitSuccess.txHash}</span>
+                <TxHashLink hash={submitSuccess.txHash} truncate={18} />
               </div>
             </div>
 

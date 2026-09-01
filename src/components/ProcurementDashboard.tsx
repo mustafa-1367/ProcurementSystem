@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileText, Eye, AlertTriangle, PlusCircle } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
+import { DashboardCharts } from './DashboardCharts';
 
 interface ProcurementDashboardProps {
   setActivePhase: (p: any) => void;
@@ -244,6 +245,13 @@ export function ProcurementDashboard({
           <div className="text-sm text-gray-600">{t('dashboard.quickActionsDesc')}</div>
         </div>
       </div>
+
+      <DashboardCharts
+        tenders={tenders}
+        bids={bids}
+        contracts={contracts}
+        blockchainRecords={blockchainRecords}
+      />
 
       <div className="grid grid-cols-3 gap-4">
         {userRole === 'government' && (

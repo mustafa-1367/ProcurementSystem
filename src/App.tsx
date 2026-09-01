@@ -14,7 +14,8 @@ import { SubmitBid } from './components/SubmitBid';
 import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock } from 'lucide-react';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock, Database } from 'lucide-react';
+import { generateDemoData } from './data/demoData';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
@@ -102,6 +103,18 @@ function AppContent() {
     if (!loaded) return;
     saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers });
   }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, loaded]);
+  const loadDemoData = useCallback(() => {
+    const data = generateDemoData();
+    setTenders(data.tenders);
+    setBids(data.bids);
+    setContracts(data.contracts);
+    setBlockchainRecords(data.blockchainRecords);
+    setDisputes(data.disputes);
+    setReports(data.reports);
+    setReputationScores(data.reputationScores);
+    setRegisteredSuppliers(data.registeredSuppliers);
+  }, []);
+
   const { t, language, setLanguage, dir } = useTranslation();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('citizen');
@@ -116,6 +129,13 @@ function AppContent() {
 
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem('darkMode') === 'true'; } catch { return false; }
+  });
+  // Pending state for accessibility panel — only applied on confirm
+  const [pendingHighContrast, setPendingHighContrast] = useState(false);
+  const [pendingDarkMode, setPendingDarkMode] = useState(false);
+  const [pendingFontSizeIdx, setPendingFontSizeIdx] = useState(1);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -133,6 +153,15 @@ function AppContent() {
       document.documentElement.classList.remove('high-contrast');
     }
   }, [highContrast]);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+    }
+    localStorage.setItem('darkMode', String(darkMode));
+  }, [darkMode]);
 
   // Ctrl+K / Cmd+K to focus search bar
   useEffect(() => {
@@ -499,7 +528,7 @@ function AppContent() {
 
             {/* Accessibility */}
             <button
-              onClick={() => setShowAccessibility(true)}
+              onClick={() => { setPendingHighContrast(highContrast); setPendingDarkMode(darkMode); setPendingFontSizeIdx(fontSizeIdx); setShowAccessibility(true); }}
               className="flex items-center gap-1.5 rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-white"
               style={{ color: '#c7d3e0', padding: '5px 8px', fontSize: '12px', fontWeight: 600, background: 'rgba(255,255,255,.06)', borderRadius: 6 }}
               aria-label={t('a11y.title')}
@@ -683,9 +712,23 @@ function AppContent() {
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
       }}>
         <Activity style={{ width: 16, height: 16, color: connected ? '#065f46' : '#92400e' }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: connected ? '#065f46' : '#78350f' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: connected ? '#065f46' : '#78350f', flex: 1, textAlign: 'center' }}>
           {connected ? t('app.blockchainBanner') : t('app.simulationBanner')}
         </span>
+        {tenders.length === 0 && (
+          <button
+            onClick={loadDemoData}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: '#0f2942', color: '#fff', border: 'none', borderRadius: 8,
+              padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            <Database style={{ width: 13, height: 13 }} />
+            {t('app.loadDemoData')}
+          </button>
+        )}
       </div>
 
       {/* Main Content */}
@@ -752,6 +795,8 @@ function AppContent() {
             contracts={contracts}
             blockchainRecords={blockchainRecords}
             userRole={userRole}
+            disputes={disputes}
+            reports={reports}
           />
         )}
         {activePhase === 'dao' && (
@@ -877,18 +922,18 @@ function AppContent() {
         >
           <div style={{
             position: 'absolute', top: 0, right: 0,
-            background: highContrast ? '#000' : '#fff',
+            background: '#fff',
             width: 420, maxWidth: '100vw',
             maxHeight: '100vh', overflowY: 'auto',
             boxShadow: '-4px 0 24px rgba(0,0,0,.15)',
-            borderLeft: highContrast ? '2px solid #ffd700' : '1px solid #e5e7eb',
+            borderLeft: '1px solid #e5e7eb',
           }}>
             {/* Header */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '20px 24px 0',
             }}>
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: highContrast ? '#ffd700' : '#0f2942' }}>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f2942' }}>
                 {t('a11y.title')}
               </h2>
               <button
@@ -896,79 +941,79 @@ function AppContent() {
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4 }}
                 aria-label="Close"
               >
-                <X style={{ width: 22, height: 22, color: highContrast ? '#ffd700' : '#6b7280' }} />
+                <X style={{ width: 22, height: 22, color: '#6b7280' }} />
               </button>
             </div>
 
             <div style={{ padding: '16px 24px 24px' }}>
               {/* Intro */}
-              <p style={{ fontSize: 14, color: highContrast ? '#fff' : '#374151', lineHeight: 1.6, marginTop: 0, marginBottom: 4 }}>
+              <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.6, marginTop: 0, marginBottom: 4 }}>
                 {t('a11y.intro')}
               </p>
-              <p style={{ fontSize: 13, color: highContrast ? '#ccc' : '#6b7280', lineHeight: 1.6, marginTop: 0 }}>
+              <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6, marginTop: 0 }}>
                 {t('a11y.moreGuides')}{' '}
                 <a
                   href="https://mcmw.abilitynet.org.uk/"
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{ color: highContrast ? '#00bfff' : '#1d4ed8', textDecoration: 'underline', fontWeight: 600 }}
+                  style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: 600 }}
                 >
                   mcmw.abilitynet.org.uk
                 </a>
               </p>
 
               {/* Text Size Section */}
-              <h3 style={{ fontSize: 17, fontWeight: 600, color: highContrast ? '#ffd700' : '#1d4ed8', marginBottom: 12, marginTop: 20 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 600, color: '#1d4ed8', marginBottom: 12, marginTop: 20 }}>
                 {t('a11y.textSize')}
               </h3>
-              <p style={{ fontSize: 13, color: highContrast ? '#ccc' : '#6b7280', lineHeight: 1.6, marginTop: 0, marginBottom: 12 }}>
+              <p style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6, marginTop: 0, marginBottom: 12 }}>
                 {t('a11y.textSizeDesc')}
               </p>
 
               {/* Contrast Section */}
-              <h3 style={{ fontSize: 17, fontWeight: 600, color: highContrast ? '#ffd700' : '#1d4ed8', marginBottom: 12, marginTop: 24 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 600, color: '#1d4ed8', marginBottom: 12, marginTop: 24 }}>
                 {t('a11y.contrast')}
               </h3>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
-                  onClick={() => setHighContrast(false)}
+                  onClick={() => setPendingHighContrast(false)}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
-                    border: !highContrast ? '2px solid #059669' : '1.5px solid #d1d5db',
-                    background: !highContrast ? '#ecfdf5' : (highContrast ? '#111' : '#fff'),
+                    border: !pendingHighContrast ? '2px solid #059669' : '1.5px solid #d1d5db',
+                    background: !pendingHighContrast ? '#ecfdf5' : '#fff',
                   }}
                 >
                   <div style={{
                     width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                    border: `2px solid ${!highContrast ? '#059669' : '#d1d5db'}`,
-                    background: !highContrast ? '#059669' : 'transparent',
+                    border: `2px solid ${!pendingHighContrast ? '#059669' : '#d1d5db'}`,
+                    background: !pendingHighContrast ? '#059669' : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {!highContrast && (
+                    {!pendingHighContrast && (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: highContrast ? '#ffd700' : '#0f2942' }}>{t('a11y.defaultSettings')}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#0f2942' }}>{t('a11y.defaultSettings')}</span>
                 </button>
                 <button
-                  onClick={() => setHighContrast(true)}
+                  onClick={() => setPendingHighContrast(true)}
                   style={{
                     flex: 1, display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
-                    border: highContrast ? '2px solid #ffd700' : '1.5px solid #d1d5db',
+                    border: pendingHighContrast ? '2px solid #ffd700' : '1.5px solid #d1d5db',
                     background: '#111',
                   }}
                 >
                   <div style={{
                     width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
-                    border: `2px solid ${highContrast ? '#ffd700' : '#555'}`,
-                    background: highContrast ? '#ffd700' : 'transparent',
+                    border: `2px solid ${pendingHighContrast ? '#ffd700' : '#555'}`,
+                    background: pendingHighContrast ? '#ffd700' : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {highContrast && (
+                    {pendingHighContrast && (
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
@@ -978,14 +1023,44 @@ function AppContent() {
                 </button>
               </div>
 
+              {/* Dark Mode Section */}
+              <h3 style={{ fontSize: 17, fontWeight: 600, color: '#1d4ed8', marginBottom: 12, marginTop: 24 }}>
+                Dark Mode
+              </h3>
+              <button
+                onClick={() => setPendingDarkMode(!pendingDarkMode)}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '11px 14px', borderRadius: 8, cursor: 'pointer',
+                  border: pendingDarkMode ? '2px solid #6366f1' : '1.5px solid #d1d5db',
+                  background: pendingDarkMode ? '#1e1b4b' : '#fff',
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${pendingDarkMode ? '#6366f1' : '#d1d5db'}`,
+                  background: pendingDarkMode ? '#6366f1' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {pendingDarkMode && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: pendingDarkMode ? '#a5b4fc' : '#0f2942' }}>
+                  {pendingDarkMode ? 'Dark Mode Enabled' : 'Enable Dark Mode'}
+                </span>
+              </button>
+
               {/* Action Buttons */}
               <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
                 <button
-                  onClick={() => { setFontSizeIdx(1); setHighContrast(false); }}
+                  onClick={() => { setPendingFontSizeIdx(1); setPendingHighContrast(false); setPendingDarkMode(false); }}
                   style={{
                     flex: 1, padding: '11px 20px', borderRadius: 8,
                     border: '1.5px solid #1d4ed8', background: 'transparent',
-                    color: highContrast ? '#ffd700' : '#1d4ed8',
+                    color: '#1d4ed8',
                     fontSize: 13, fontWeight: 700, cursor: 'pointer',
                     textTransform: 'uppercase', letterSpacing: '0.03em',
                   }}
@@ -993,7 +1068,7 @@ function AppContent() {
                   {t('a11y.resetDefault')}
                 </button>
                 <button
-                  onClick={() => setShowAccessibility(false)}
+                  onClick={() => { setHighContrast(pendingHighContrast); setDarkMode(pendingDarkMode); setFontSizeIdx(pendingFontSizeIdx); setShowAccessibility(false); }}
                   style={{
                     flex: 1, padding: '11px 20px', borderRadius: 8,
                     border: 'none', background: '#1d4ed8',

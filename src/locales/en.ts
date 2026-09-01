@@ -11,6 +11,7 @@ export const en = {
     fontIncrease: 'Increase font size',
     simulationBanner: 'Simulation Mode — Roles are freely switchable for demo. Connect MetaMask wallet to authenticate your role and record transactions on Sepolia testnet.',
     blockchainBanner: 'Blockchain Mode — Transactions are recorded on Sepolia testnet.',
+    loadDemoData: 'Load Demo Data',
   },
   a11y: {
     title: 'Accessibility',

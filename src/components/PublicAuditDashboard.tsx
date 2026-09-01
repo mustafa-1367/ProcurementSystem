@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Coins } from 'lucide-react';
+import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieChart, Activity, Clock, CheckCircle, Shield, Filter, Link as LinkIcon, Coins, FileDown } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
+import { generateAuditPDF } from '../utils/pdfExport';
+import { TxHashLink } from './TxHashLink';
 
 interface PublicAuditDashboardProps {
   tenders: any[];
@@ -8,9 +10,11 @@ interface PublicAuditDashboardProps {
   contracts: any[];
   blockchainRecords: any[];
   userRole: string;
+  disputes?: any[];
+  reports?: any[];
 }
 
-export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole }: PublicAuditDashboardProps) {
+export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole, disputes = [], reports = [] }: PublicAuditDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
@@ -98,13 +102,25 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
           <h2 className="text-gray-900">{t('audit.title')}</h2>
           <p className="text-gray-600 mt-1">{t('audit.subtitle')}</p>
         </div>
-        <button
-          onClick={handleDownloadReport}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Download className="w-5 h-5" />
-          {t('audit.downloadReport')}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleDownloadReport}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Download className="w-5 h-5" />
+            CSV
+          </button>
+          <button
+            onClick={() => generateAuditPDF({ tenders, bids, contracts, blockchainRecords, disputes, reports })}
+            className="flex items-center gap-2 text-white px-4 py-2 rounded-lg transition-colors"
+            style={{ background: '#0f2942' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#1a4d73'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#0f2942'; }}
+          >
+            <FileDown className="w-5 h-5" />
+            PDF
+          </button>
+        </div>
       </div>
 
       {/* Key Metrics */}
@@ -687,9 +703,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                     border: '1px solid #e8e7e4',
                                   }}>
                                     <LinkIcon style={{ width: 12, height: 12, color: '#9e9d98' }} />
-                                    <code style={{ fontSize: 11.5, color: '#6e6c66', fontFamily: '"SF Mono", "Fira Code", monospace', letterSpacing: '-0.02em' }}>
-                                      {(record.transactionHash || record.hash).slice(0, 22)}...
-                                    </code>
+                                    <TxHashLink hash={record.transactionHash || record.hash} truncate={22} showIcon />
                                   </div>
                                   {record.verified ? (
                                     <span style={{

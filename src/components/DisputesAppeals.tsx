@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Scale, FileUp, CheckCircle, Clock, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
+import { TxHashLink } from './TxHashLink';
 
 interface DisputesAppealsProps {
   disputes: any[];
@@ -298,9 +299,9 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
                   {submitSuccess.onChain ? t('disputes.onChainConfirmed') : t('disputes.simulatedRecord')}
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{t('disputes.txHash')}</span>
-                <span style={{ fontSize: 11, color: '#0f2942', fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{submitSuccess.txHash}</span>
+                <TxHashLink hash={submitSuccess.txHash} truncate={18} />
               </div>
             </div>
 

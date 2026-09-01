@@ -1565,6 +1565,56 @@ html {
   }
 }
 
+/* Dark Mode */
+.dark-mode {
+  background: #111827 !important;
+}
+
+.dark-mode > div > main,
+.dark-mode > div {
+  background: #111827 !important;
+}
+
+.dark-mode .bg-gray-50,
+.dark-mode .min-h-screen {
+  background-color: #111827 !important;
+}
+
+.dark-mode .bg-white,
+.dark-mode [style*="background: #fff"],
+.dark-mode [style*="background: '#fff'"],
+.dark-mode [style*="background: #fcfcfb"] {
+  background-color: #1f2937 !important;
+}
+
+.dark-mode .text-gray-900,
+.dark-mode .text-gray-800,
+.dark-mode .text-gray-700 {
+  color: #f3f4f6 !important;
+}
+
+.dark-mode .text-gray-600,
+.dark-mode .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+.dark-mode .border-gray-200,
+.dark-mode .border-gray-300 {
+  border-color: #374151 !important;
+}
+
+.dark-mode .bg-blue-50 {
+  background-color: #1e3a5f !important;
+}
+
+.dark-mode .text-blue-900 {
+  color: #93c5fd !important;
+}
+
+.dark-mode .text-blue-800 {
+  color: #93c5fd !important;
+}
+
 /* High Contrast Mode — overrides all inline styles */
 .high-contrast {
   background: #000 !important;

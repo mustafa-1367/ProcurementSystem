@@ -316,6 +316,40 @@ input[type="file"]::file-selector-button:hover {
   .md\:grid-cols-2 {
     grid-template-columns: 1fr !important;
   }
+
+  /* Inline-style 4-column grids (metrics, details) → 2 columns */
+  div[style*="grid-template-columns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Dashboard charts 2-col grid → 1 column */
+  div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Notification dropdown: full width on mobile */
+  div[style*="width: 360px"] {
+    width: calc(100vw - 24px) !important;
+    right: -12px !important;
+  }
+
+  /* Search bar: hide on very small screens, keep on tablets */
+  div[style*="width: 180"] {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Even smaller screens: single column everywhere */
+  .mobile-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  div[style*="grid-template-columns: repeat(4"],
+  div[style*="grid-template-columns: repeat(3"],
+  div[style*="grid-template-columns: 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* Spinner animation for loading indicators */
