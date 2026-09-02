@@ -55,10 +55,10 @@ const allTabs = [
 
 const roleTabs: Record<UserRole, string[]> = {
   government: ['dashboard', 'pre', 'tender', 'post', 'disputes', 'audit', 'reputation'],
-  supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'reputation', 'whistleblower'],
+  supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'reputation'],
   citizen:    ['dashboard', 'audit', 'whistleblower', 'reputation'],
-  auditor:    ['dashboard', 'audit', 'supplier', 'reputation', 'whistleblower', 'dao'],
-  oversight:  ['dashboard', 'audit', 'supplier', 'whistleblower', 'dao', 'reputation'],
+  auditor:    ['dashboard', 'audit', 'supplier', 'reputation', 'dao'],
+  oversight:  ['dashboard', 'audit', 'supplier', 'dao', 'reputation'],
 };
 
 const roleFirstTab: Record<UserRole, string> = {
