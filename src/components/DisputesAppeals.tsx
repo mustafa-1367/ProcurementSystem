@@ -303,14 +303,58 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
             <h2 style={{ margin: '0 0 6px 0', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>
               {t('disputes.objectionWindowTitle')}
             </h2>
-            <p style={{ margin: '0 0 10px 0', color: '#52514e', fontSize: 15, lineHeight: 1.5 }}>
+            <p style={{ margin: '0 0 12px 0', color: '#52514e', fontSize: 14, lineHeight: 1.6 }}>
               {t('disputes.objectionWindowDesc')}
             </p>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f2942', marginBottom: 8 }}>{t('disputes.protectionsTitle')}</div>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#52514e', lineHeight: 1.8 }}>
+              <li>{t('disputes.protection1')}</li>
+              <li>{t('disputes.protection2')}</li>
+              <li>{t('disputes.protection3')}</li>
+              <li>{t('disputes.protection4')}</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Process Reference (static) — shows the objection lifecycle */}
+      {objections.length === 0 && (
+        <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0 }}>
+            {[
+              t('disputes.stageFiled'),
+              t('disputes.stageReview'),
+              t('disputes.stageAcceptedRejected'),
+              t('disputes.stageDAOEscalation'),
+              t('disputes.stageResolved'),
+            ].map((label, i, arr) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < arr.length - 1 ? 1 : 'none' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 60 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: '#e5e7eb', color: '#9ca3af', fontSize: 12, fontWeight: 800,
+                  }}>
+                    {i + 1}
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', textAlign: 'center', whiteSpace: 'nowrap' }}>{label}</span>
+                </div>
+                {i < arr.length - 1 && (
+                  <div style={{ flex: 1, height: 2, background: '#d1d5db', margin: '0 6px', marginBottom: 18 }} />
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* Government: Review Panel for filed objections */}
+      {userRole === 'government' && filedObjections.length === 0 && (
+        <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: '36px 18px', textAlign: 'center' }}>
+          <CheckCircle style={{ width: 40, height: 40, color: '#a7f3d0', margin: '0 auto 10px' }} />
+          <p style={{ fontSize: 15, fontWeight: 700, color: '#0b0b0b', margin: '0 0 4px' }}>{t('disputes.noFiledObjections')}</p>
+          <p style={{ fontSize: 13, color: '#6e6c66', margin: 0 }}>{t('disputes.noFiledObjectionsHint')}</p>
+        </div>
+      )}
       {userRole === 'government' && filedObjections.length > 0 && (
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
           <h2 style={{ margin: '0 0 12px 0', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>
@@ -362,82 +406,133 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
         </div>
       )}
 
-      {/* Filed Objections List */}
+      {/* Supplier empty state */}
+      {userRole === 'supplier' && objections.length === 0 && (
+        <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: '36px 18px', textAlign: 'center' }}>
+          <Scale style={{ width: 40, height: 40, color: '#d1d0cc', margin: '0 auto 10px' }} />
+          <p style={{ fontSize: 15, fontWeight: 700, color: '#0b0b0b', margin: '0 0 4px' }}>{t('disputes.noObjections')}</p>
+          <p style={{ fontSize: 13, color: '#6e6c66', margin: 0 }}>{t('disputes.noObjectionsHint')}</p>
+        </div>
+      )}
+
+      {/* Objection Cards with per-dispute steppers */}
       {objections.length > 0 && (
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <h2 style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('disputes.listTitle')}</h2>
+            <span style={{ fontSize: 12, fontWeight: 600, padding: '3px 10px', borderRadius: 999, background: '#f0f0ee', color: '#6e6c66' }}>{objections.length}</span>
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colId')}</th>
-                <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colTender')}</th>
-                <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colGrounds')}</th>
-                <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colDate')}</th>
-                <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colStatus')}</th>
-                {userRole === 'supplier' && (
-                  <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colActions')}</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {objections.map((dispute: any, idx: number) => {
-                const sStyle = statusStyle(dispute.status);
-                return (
-                  <tr key={dispute.id} style={{ background: 'transparent' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#f8f8f6'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9', fontFamily: 'ui-monospace, monospace', fontSize: '12px' }}>{dispute.id}</td>
-                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
-                      <strong>{dispute.tenderTitle || dispute.contractTitle || ''}</strong>
-                      <br /><span style={{ fontSize: '12.5px', color: '#6e6c66' }}>{dispute.tenderId || dispute.contractId || ''}</span>
-                    </td>
-                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9', color: '#52514e' }}>{dispute.grounds || dispute.reason || ''}</td>
-                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9', color: '#6e6c66', fontSize: '12.5px' }}>{new Date(dispute.filedAt || dispute.createdAt).toLocaleDateString()}</td>
-                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, border: '1px solid',
-                        color: sStyle.color, background: sStyle.background, borderColor: sStyle.borderColor,
-                      }}>
-                        {statusLabel(dispute.status)}
-                      </span>
-                      {' '}
-                      {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
-                      )}
-                    </td>
-                    {userRole === 'supplier' && (
-                      <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
-                        {dispute.status === 'rejected' && !dispute.escalatedToDAO && (
-                          <div>
-                            <button
-                              onClick={() => handleEscalateToDAO(dispute)}
-                              title={t('disputes.escalateHint')}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                                padding: '6px 12px', borderRadius: 8, border: '1px solid #c99a3c',
-                                background: '#fef9e7', color: '#78350f', fontSize: 12, fontWeight: 700,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              <ArrowUpRight style={{ width: 13, height: 13 }} />
-                              {t('disputes.escalateToDAO')}
-                            </button>
-                            <div style={{ fontSize: 11, color: '#6e6c66', marginTop: 3, maxWidth: 180 }}>{t('disputes.escalateHint')}</div>
-                          </div>
-                        )}
-                        {dispute.escalatedToDAO && (
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#8a5a12' }}>
-                            {t('disputes.escalatedToDAO')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {(userRole === 'government' ? objections.filter(d => d.status !== 'filed') : objections).map((dispute: any) => {
+              const sStyle = statusStyle(dispute.status);
+              // Per-dispute stage
+              const disputeStage =
+                dispute.status === 'filed' ? 0 :
+                dispute.status === 'accepted' || dispute.status === 'rejected' ? 2 :
+                dispute.status === 'escalated' ? 3 :
+                dispute.status === 'resolved' ? 4 : 0;
+              // If government is currently reviewing (filed objections exist in review panel), show stage 1 for filed
+              const effectiveDisputeStage = (userRole === 'government' && dispute.status === 'filed') ? 1 : disputeStage;
+
+              const stepLabels = [
+                t('disputes.stageFiled'),
+                t('disputes.stageReview'),
+                t('disputes.stageAcceptedRejected'),
+                t('disputes.stageDAOEscalation'),
+                t('disputes.stageResolved'),
+              ];
+
+              return (
+                <div key={dispute.id} style={{
+                  background: '#fff', border: '1px solid #e8e7e4', borderRadius: 12,
+                  overflow: 'hidden', transition: 'box-shadow 0.15s',
+                }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                >
+                  {/* Card header */}
+                  <div style={{ padding: '14px 18px', borderBottom: '1px solid #f0efec' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 200 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: '#9e9d98', fontWeight: 600 }}>{dispute.id}</span>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, border: '1px solid',
+                            color: sStyle.color, background: sStyle.background, borderColor: sStyle.borderColor,
+                          }}>
+                            {statusLabel(dispute.status)}
                           </span>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                          )}
+                        </div>
+                        <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#0f2942' }}>{dispute.tenderTitle || dispute.contractTitle || ''}</p>
+                        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#52514e', lineHeight: 1.5 }}>{dispute.grounds || dispute.reason || ''}</p>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9e9d98' }}>{new Date(dispute.filedAt || dispute.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      {userRole === 'supplier' && dispute.status === 'rejected' && !dispute.escalatedToDAO && (
+                        <div style={{ flexShrink: 0 }}>
+                          <button
+                            onClick={() => handleEscalateToDAO(dispute)}
+                            title={t('disputes.escalateHint')}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              padding: '8px 14px', borderRadius: 8, border: '1px solid #c99a3c',
+                              background: '#fef9e7', color: '#78350f', fontSize: 12, fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <ArrowUpRight style={{ width: 13, height: 13 }} />
+                            {t('disputes.escalateToDAO')}
+                          </button>
+                          <div style={{ fontSize: 11, color: '#6e6c66', marginTop: 3 }}>{t('disputes.escalateHint')}</div>
+                        </div>
+                      )}
+                      {userRole === 'supplier' && dispute.escalatedToDAO && (
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#8a5a12', flexShrink: 0 }}>
+                          {t('disputes.escalatedToDAO')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Per-dispute stepper */}
+                  <div style={{ padding: '12px 18px', background: '#fafaf9' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      {stepLabels.map((label, i, arr) => {
+                        const isCompleted = i < effectiveDisputeStage;
+                        const isCurrent = i === effectiveDisputeStage;
+
+                        const circleBg = isCompleted ? '#059669' : isCurrent ? '#0f2942' : '#e5e7eb';
+                        const circleColor = isCompleted ? '#fff' : isCurrent ? '#c99a3c' : '#9ca3af';
+                        const labelColor = isCompleted ? '#059669' : isCurrent ? '#0f2942' : '#9ca3af';
+                        const lineBg = isCompleted ? '#059669' : '#d1d5db';
+
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < arr.length - 1 ? 1 : 'none' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 50 }}>
+                              <div style={{
+                                width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                background: circleBg, color: circleColor, fontSize: 10, fontWeight: 800,
+                                transition: 'all 0.3s ease',
+                              }}>
+                                {isCompleted ? '\u2713' : String(i + 1)}
+                              </div>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: labelColor, textAlign: 'center', whiteSpace: 'nowrap', transition: 'color 0.3s ease' }}>{label}</span>
+                            </div>
+                            {i < arr.length - 1 && (
+                              <div style={{ flex: 1, height: 2, background: lineBg, margin: '0 4px', marginBottom: 16, transition: 'background 0.3s ease' }} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

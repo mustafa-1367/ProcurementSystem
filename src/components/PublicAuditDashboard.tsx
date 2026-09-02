@@ -19,6 +19,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
   const [filterCategory, setFilterCategory] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState('all');
+  const [reviewedRecords, setReviewedRecords] = useState<Set<string>>(new Set());
   const { t } = useTranslation();
   const parseBudget = (v: any) => Number(String(v).replace(/,/g, ''));
 
@@ -577,6 +578,11 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {userRole === 'auditor' && reviewedRecords.size > 0 && (
+                    <span style={{ background: '#dcfce7', color: '#0a6b0a', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999, border: '1px solid #bbf7d0' }}>
+                      {reviewedRecords.size} {t('audit.reviewed')}
+                    </span>
+                  )}
                   <span style={{ background: 'linear-gradient(135deg, #1e3a5f, #2d5a8e)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
                     {filteredRecords.length} {t('audit.entries')}
                   </span>
@@ -732,6 +738,44 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                     }}>
                                       ● On-Chain
                                     </span>
+                                  )}
+                                  {userRole === 'auditor' && reviewedRecords.has(record.id) && (
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      fontSize: 11, fontWeight: 700, padding: '3px 9px',
+                                      borderRadius: 999, color: '#0a6b0a', background: '#dcfce7', border: '1px solid #bbf7d0',
+                                    }}>
+                                      <CheckCircle style={{ width: 12, height: 12 }} />
+                                      {t('audit.reviewed')}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {userRole === 'auditor' && (
+                                <div style={{ marginTop: 8 }}>
+                                  {reviewedRecords.has(record.id) ? (
+                                    <button
+                                      onClick={() => setReviewedRecords((prev) => { const next = new Set(prev); next.delete(record.id); return next; })}
+                                      style={{
+                                        fontSize: 11, fontWeight: 600, padding: '4px 12px',
+                                        borderRadius: 6, border: '1px solid #e1e0d9', background: '#f8f8f6',
+                                        color: '#6e6c66', cursor: 'pointer',
+                                      }}
+                                    >
+                                      {t('audit.undoReview')}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => setReviewedRecords((prev) => new Set(prev).add(record.id))}
+                                      style={{
+                                        fontSize: 11, fontWeight: 600, padding: '4px 12px',
+                                        borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff',
+                                        color: '#1d4ed8', cursor: 'pointer',
+                                      }}
+                                    >
+                                      <CheckCircle style={{ width: 12, height: 12, display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                                      {t('audit.markReviewed')}
+                                    </button>
                                   )}
                                 </div>
                               )}

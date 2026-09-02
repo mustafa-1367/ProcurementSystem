@@ -21,6 +21,7 @@ interface SupplierTrackerProps {
   reports: any[];
   tenders: any[];
   blockchainRecords: any[];
+  userRole?: string;
 }
 
 // ─── Status Stepper ───────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export function SupplierTracker({
   reports,
   tenders,
   blockchainRecords,
+  userRole = 'citizen',
 }: SupplierTrackerProps) {
   const { t } = useTranslation();
   const [supplierFilter, setSupplierFilter] = useState('');
@@ -523,6 +525,131 @@ export function SupplierTracker({
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Auditor: Financial Compliance Panel ── */}
+      {hasFilter && userRole === 'auditor' && (
+        <div className="bg-white rounded-lg shadow-md border border-gray-200">
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200">
+            <Banknote className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-gray-900 font-semibold">{t('supplier.financialCompliance')}</h3>
+          </div>
+          <div className="p-6">
+            {myContracts.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">{t('supplier.noContracts')}</p>
+            ) : (
+              <div className="space-y-4">
+                {myContracts.map((contract) => {
+                  const tender = tenderMap[contract.tenderId];
+                  const budgetNum = Number(String(tender?.budget ?? 0).replace(/,/g, ''));
+                  const contractAmt = Number(contract.amount ?? 0);
+                  const variance = budgetNum > 0 ? ((contractAmt - budgetNum) / budgetNum * 100) : 0;
+                  const isOverBudget = variance > 0;
+                  const milestones = contract.milestones ?? [];
+                  const paidMilestones = milestones.filter((m: any) => m.paid);
+
+                  return (
+                    <div key={contract.id} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 16 }}>
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="font-medium text-gray-900">{tender?.title ?? contract.tenderId}</p>
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${isOverBudget ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                          {isOverBudget ? '+' : ''}{variance.toFixed(1)}% {t('supplier.budgetVariance')}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-500">{t('supplier.estimatedBudget')}</p>
+                          <p className="font-semibold text-gray-900">{budgetNum.toLocaleString()} {t('supplier.afn')}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">{t('supplier.contractAmount')}</p>
+                          <p className="font-semibold text-gray-900">{contractAmt.toLocaleString()} {t('supplier.afn')}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">{t('supplier.milestonePayments')}</p>
+                          <p className="font-semibold text-gray-900">{paidMilestones.length}/{milestones.length}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500">{t('supplier.completionProgress')}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${contract.progress ?? 0}%` }} />
+                            </div>
+                            <span className="text-xs font-bold text-gray-700">{contract.progress ?? 0}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Oversight: Investigation Status Panel ── */}
+      {hasFilter && userRole === 'oversight' && (
+        <div className="bg-white rounded-lg shadow-md border border-gray-200">
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-200">
+            <Eye className="w-5 h-5 text-red-600" />
+            <h3 className="text-gray-900 font-semibold">{t('supplier.investigationStatus')}</h3>
+          </div>
+          <div className="p-6">
+            {(() => {
+              const relatedReports = filterLower
+                ? reports.filter((r) =>
+                    (r.title ?? '').toLowerCase().includes(filterLower) ||
+                    (r.description ?? '').toLowerCase().includes(filterLower) ||
+                    myTenderIds.has(r.relatedTenderId)
+                  )
+                : [];
+              const hasItems = myDisputes.length > 0 || relatedReports.length > 0;
+
+              if (!hasItems) {
+                return <p className="text-gray-500 text-center py-4">{t('supplier.noInvestigations')}</p>;
+              }
+
+              return (
+                <div className="space-y-3">
+                  {myDisputes.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <Gavel className="w-4 h-4 text-orange-500" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{d.title}</p>
+                          <p className="text-xs text-gray-500">{t('supplier.disputeType')}: {d.type ?? '—'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {d.flaggedForReReview && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">{t('supplier.reReview')}</span>
+                        )}
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${disputeStatusBadge(d.status)}`}>{d.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {relatedReports.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-4 h-4 text-red-500" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{r.title}</p>
+                          <p className="text-xs text-gray-500">{t('supplier.whistleblowerReport')}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        r.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                        r.status === 'investigating' ? 'bg-blue-100 text-blue-800' :
+                        'bg-amber-100 text-amber-800'
+                      }`}>{r.status ?? 'pending'}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 

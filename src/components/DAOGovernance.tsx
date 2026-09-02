@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Vote, CheckCircle, XCircle, TrendingUp, Shield, AlertCircle, FileText, Image, Video } from 'lucide-react';
+import { Users, Vote, CheckCircle, XCircle, TrendingUp, Shield, AlertCircle, FileText, Image, Video, X, ExternalLink, Clock } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { useWeb3 } from '../utils/useWeb3';
@@ -11,6 +11,8 @@ interface DAOGovernanceProps {
   contracts: any[];
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
+  userRole: string;
+  reports: any[];
 }
 
 export function DAOGovernance({
@@ -20,18 +22,33 @@ export function DAOGovernance({
   contracts,
   setBlockchainRecords,
   blockchainRecords,
+  userRole,
+  reports,
 }: DAOGovernanceProps) {
   const [userVotes, setUserVotes] = useState<{ [key: string]: 'approve' | 'reject' }>({});
+  const [showHowItWorks, setShowHowItWorks] = useState(true);
+  const [daoFilter, setDaoFilter] = useState<'active' | 'resolved' | 'expired'>('active');
   const { t } = useTranslation();
   const { connected, isCorrectNetwork, connect, account } = useWeb3();
   const QUORUM_THRESHOLD = 5;
 
+  // Roles allowed to vote
+  const canVote = userRole === 'auditor' || userRole === 'oversight';
+
+  const isDeadlinePassed = (dispute: any) => {
+    if (!dispute.votingDeadline) return false;
+    return new Date(dispute.votingDeadline).getTime() <= Date.now();
+  };
+
   const castVote = async (disputeId: string, vote: 'approve' | 'reject') => {
+    if (!canVote) return;
+
     const voteKey = account ? `${account}-${disputeId}` : disputeId;
     if (userVotes[voteKey]) return;
 
     const dispute = disputes.find((d) => d.id === disputeId);
     if (!dispute) return;
+    if (isDeadlinePassed(dispute)) return;
 
     const { block: voteBlock, contract: voteContract, onChain: voteOnChain } = await addProcurementRecordAsync('dao_resolution', {
       disputeId,
@@ -45,6 +62,7 @@ export function DAOGovernance({
       contractId: voteContract.id,
       transactionHash: voteContract.transactionHash,
       vote,
+      voter: account || 'anonymous',
       timestamp: new Date().toISOString(),
       verified: voteOnChain,
       simulated: !voteOnChain,
@@ -86,8 +104,19 @@ export function DAOGovernance({
     setDisputes(updatedDisputes);
   };
 
-  const activeDisputes = disputes.filter((d) => d.status === 'voting' && d.votes);
+  // Categorise disputes
+  const activeDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && !isDeadlinePassed(d));
+  const expiredDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && isDeadlinePassed(d));
   const resolvedDisputes = disputes.filter((d) => d.status === 'resolved' && d.resolution);
+
+  // Unique voters from blockchain records
+  const uniqueVoters = new Set(
+    blockchainRecords.filter(r => r.type === 'dao_vote' && r.voter).map(r => r.voter)
+  );
+
+  // Vote history for a dispute
+  const getVoteHistory = (disputeId: string) =>
+    blockchainRecords.filter(r => r.type === 'dao_vote' && r.disputeId === disputeId);
 
   // Identify source of escalation
   const getSourceLabel = (dispute: any) => {
@@ -101,6 +130,12 @@ export function DAOGovernance({
     if (dispute.type === 'escalated_whistleblower') return { color: '#b91c1c', background: '#fef2f2', borderColor: '#fecaca' };
     return { color: '#7c3aed', background: '#f3eefe', borderColor: '#ddd6fe' };
   };
+
+  // Total disputes with votes
+  const allVotingDisputes = disputes.filter(d => d.votes);
+  const avgVotersPerDispute = allVotingDisputes.length > 0
+    ? Math.round(allVotingDisputes.reduce((sum, d) => sum + (d.votes?.totalVoters || 0), 0) / allVotingDisputes.length)
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -129,8 +164,8 @@ export function DAOGovernance({
         </div>
       )}
 
-      {/* DAO Statistics */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* DAO Statistics — fixed #2 (members) and #6 (participation label) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div style={{ background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe', padding: '20px', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Vote style={{ width: 20, height: 20, color: '#2563eb' }} />
@@ -156,12 +191,8 @@ export function DAOGovernance({
             <TrendingUp style={{ width: 20, height: 20, color: '#7c3aed' }} />
           </div>
           <div>
-            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#7c3aed' }}>{t('dao.participationRate')}</p>
-            <p style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 800, color: '#1e3a5f' }}>
-              {disputes.length > 0
-                ? Math.round((disputes.reduce((sum, d) => sum + (d.votes?.totalVoters || 0), 0) / disputes.length))
-                : 0}
-            </p>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#7c3aed' }}>{t('dao.avgVotersPerDispute')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 800, color: '#1e3a5f' }}>{avgVotersPerDispute}</p>
           </div>
         </div>
 
@@ -170,24 +201,57 @@ export function DAOGovernance({
             <Users style={{ width: 20, height: 20, color: '#ca8a04' }} />
           </div>
           <div>
-            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#ca8a04' }}>{t('dao.daoMembers')}</p>
-            <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 800, color: '#1e3a5f' }}>{connected && isCorrectNetwork ? '1 (You)' : 'Connect Wallet'}</p>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: '#ca8a04' }}>{t('dao.uniqueVoters')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 800, color: '#1e3a5f' }}>{uniqueVoters.size || (connected ? 1 : 0)}</p>
           </div>
         </div>
       </div>
 
-      {/* How it works info */}
+      {/* How it works info — dismissible */}
+      {showHowItWorks && (
       <div style={{
         background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, padding: '16px 20px',
         display: 'flex', alignItems: 'flex-start', gap: 12,
       }}>
         <AlertCircle style={{ width: 18, height: 18, color: '#0284c7', flexShrink: 0, marginTop: 2 }} />
-        <div style={{ fontSize: 13, color: '#0c4a6e', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 13, color: '#0c4a6e', lineHeight: 1.6, flex: 1 }}>
           <strong>{t('dao.howItWorks')}</strong> {t('dao.howItWorksDesc')}
         </div>
+        <button
+          onClick={() => setShowHowItWorks(false)}
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 2, flexShrink: 0 }}
+          aria-label="Dismiss"
+        >
+          <X style={{ width: 16, height: 16, color: '#0284c7' }} />
+        </button>
+      </div>
+      )}
+
+      {/* Filter Tabs — #8 */}
+      <div style={{ display: 'flex', gap: 4 }}>
+        {([
+          { key: 'active' as const, label: t('dao.tabActive'), count: activeDisputes.length },
+          { key: 'resolved' as const, label: t('dao.tabResolved'), count: resolvedDisputes.length },
+          { key: 'expired' as const, label: t('dao.tabExpired'), count: expiredDisputes.length },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setDaoFilter(tab.key)}
+            style={{
+              padding: '6px 14px', borderRadius: 999, border: '1px solid',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+              ...(daoFilter === tab.key
+                ? { background: '#0f2942', color: '#fff', borderColor: '#0f2942' }
+                : { background: '#fff', color: '#6e6c66', borderColor: '#e1e0d9' }),
+            }}
+          >
+            {tab.label} ({tab.count})
+          </button>
+        ))}
       </div>
 
       {/* Active Disputes for Voting */}
+      {daoFilter === 'active' && (
       <div className="space-y-4">
         <h3 className="text-gray-900">{t('dao.activeVoting')}</h3>
         {activeDisputes.length === 0 ? (
@@ -207,7 +271,7 @@ export function DAOGovernance({
               const approvalRate = dispute.votes.totalVoters > 0
                 ? ((dispute.votes.approve / dispute.votes.totalVoters) * 100).toFixed(1)
                 : 0;
-
+              const voteHistory = getVoteHistory(dispute.id);
               const srcStyle = getSourceStyle(dispute);
 
               return (
@@ -228,7 +292,15 @@ export function DAOGovernance({
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
                         )}
                       </div>
-                      <p className="text-gray-600 mb-3">{dispute.description}</p>
+                      <p className="text-gray-600 mb-2" style={{ fontSize: 13.5 }}>{dispute.description}</p>
+
+                      {/* Source link */}
+                      {(dispute.sourceDisputeId || dispute.sourceReportId) && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#0f2942', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '4px 10px', marginBottom: 10 }}>
+                          <ExternalLink style={{ width: 12, height: 12 }} />
+                          {t('dao.sourceCase')}: {dispute.sourceDisputeId || dispute.sourceReportId}
+                        </div>
+                      )}
 
                       {/* Evidence */}
                       {(dispute.evidence || (dispute.attachments && dispute.attachments.length > 0)) && (
@@ -251,24 +323,24 @@ export function DAOGovernance({
                         </div>
                       )}
 
-                      <div className="grid grid-cols-4 gap-4 mb-4">
-                        <div>
-                          <p className="text-gray-500">{t('dao.totalVotes')}</p>
-                          <p className="text-gray-900">{dispute.votes.totalVoters}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.totalVotes')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.votes.totalVoters}</p>
                         </div>
-                        <div>
-                          <p className="text-gray-500">{t('dao.approvalRate')}</p>
-                          <p className="text-gray-900">{approvalRate}%</p>
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.approvalRate')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{approvalRate}%</p>
                         </div>
-                        <div>
-                          <p className="text-gray-500">{t('dao.quorum')}</p>
-                          <p className={dispute.votes.totalVoters >= QUORUM_THRESHOLD ? 'text-green-700' : 'text-amber-600'}>
-                            {dispute.votes.totalVoters}/{QUORUM_THRESHOLD} {t('dao.quorumRequired')}
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.quorum')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: dispute.votes.totalVoters >= QUORUM_THRESHOLD ? '#059669' : '#d97706' }}>
+                            {dispute.votes.totalVoters}/{QUORUM_THRESHOLD}
                           </p>
                         </div>
-                        <div>
-                          <p className="text-gray-500">{t('dao.timeRemaining')}</p>
-                          <p className="text-gray-900">{daysRemaining} {t('dao.days')}</p>
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.timeRemaining')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: daysRemaining <= 1 ? '#dc2626' : '#0b0b0b' }}>{daysRemaining} {t('dao.days')}</p>
                         </div>
                       </div>
 
@@ -296,13 +368,18 @@ export function DAOGovernance({
                             <span className="text-gray-700">{dispute.votes.reject} {t('dao.votes')}</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-red-600 h-2 rounded-full transition-all" style={{ width: `${100 - Number(approvalRate)}%` }}></div>
+                            <div className="bg-red-600 h-2 rounded-full transition-all" style={{ width: `${dispute.votes.totalVoters > 0 ? ((dispute.votes.reject / dispute.votes.totalVoters) * 100).toFixed(1) : 0}%` }}></div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Vote Buttons */}
-                      {!connected || !isCorrectNetwork ? (
+                      {/* Vote Buttons — #1: role-gated */}
+                      {!canVote ? (
+                        <div className="flex items-center gap-2 text-gray-500 bg-gray-50 border border-gray-200 px-4 py-2 rounded-lg text-sm">
+                          <Shield className="w-4 h-4" />
+                          {t('dao.onlyAuditorOversight')}
+                        </div>
+                      ) : !connected || !isCorrectNetwork ? (
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm">
                             <Shield className="w-4 h-4" />
@@ -331,6 +408,29 @@ export function DAOGovernance({
                           <span>{t('dao.youVoted')} {hasVoted}</span>
                         </div>
                       )}
+
+                      {/* Vote History — #3 */}
+                      {voteHistory.length > 0 && (
+                        <div style={{ marginTop: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px' }}>
+                          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#52514e' }}>{t('dao.voteHistory')} ({voteHistory.length})</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {voteHistory.slice(-5).map((v: any, i: number) => (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {v.vote === 'approve'
+                                    ? <CheckCircle style={{ width: 12, height: 12, color: '#059669' }} />
+                                    : <XCircle style={{ width: 12, height: 12, color: '#dc2626' }} />}
+                                  <span style={{ fontFamily: 'ui-monospace, monospace', color: '#6b7280' }}>
+                                    {v.voter ? `${v.voter.slice(0, 6)}...${v.voter.slice(-4)}` : 'Anonymous'}
+                                  </span>
+                                  <span style={{ fontWeight: 600, color: v.vote === 'approve' ? '#059669' : '#dc2626' }}>{v.vote}</span>
+                                </div>
+                                <span style={{ color: '#9ca3af' }}>{new Date(v.timestamp).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -339,20 +439,28 @@ export function DAOGovernance({
           </div>
         )}
       </div>
+      )}
 
       {/* Resolved Disputes */}
-      {resolvedDisputes.length > 0 && (
+      {daoFilter === 'resolved' && (
         <div className="space-y-4">
           <h3 className="text-gray-900">{t('dao.resolvedDisputes')}</h3>
+          {resolvedDisputes.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
+              <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">{t('dao.noResolvedYet')}</p>
+            </div>
+          ) : (
           <div className="space-y-3">
             {resolvedDisputes.map((dispute) => {
               const srcStyle = getSourceStyle(dispute);
+              const voteHistory = getVoteHistory(dispute.id);
               return (
-                <div key={dispute.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+                <div key={dispute.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
-                        <h4 className="text-gray-900">{dispute.title}</h4>
+                        <h4 className="text-gray-900" style={{ fontSize: 15, margin: 0 }}>{dispute.title}</h4>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
                           fontSize: '11.5px', fontWeight: 700, padding: '3px 10px',
@@ -361,7 +469,7 @@ export function DAOGovernance({
                         }}>
                           {getSourceLabel(dispute)}
                         </span>
-                        <span className={`px-3 py-1 rounded-full ${
+                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
                           dispute.resolution.decision === 'approved'
                             ? 'bg-green-100 text-green-900'
                             : 'bg-red-100 text-red-900'
@@ -374,19 +482,110 @@ export function DAOGovernance({
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }}>● Simulated</span>
                         ) : null}
                       </div>
-                      <div className="grid grid-cols-3 gap-4 text-gray-600">
-                        <div>
-                          <p className="text-gray-500">{t('dao.totalVotes')}</p>
-                          <p>{dispute.votes.totalVoters}</p>
+                      {(dispute.sourceDisputeId || dispute.sourceReportId) && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#0f2942', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '4px 10px', marginBottom: 8 }}>
+                          <ExternalLink style={{ width: 12, height: 12 }} />
+                          {t('dao.sourceCase')}: {dispute.sourceDisputeId || dispute.sourceReportId}
                         </div>
-                        <div>
-                          <p className="text-gray-500">{t('dao.approvalRate')}</p>
-                          <p>{dispute.resolution?.approvalRate?.toFixed(1) || 0}%</p>
+                      )}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-gray-600">
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.totalVotes')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.votes.totalVoters}</p>
                         </div>
-                        <div>
-                          <p className="text-gray-500">{t('dao.resolved')}</p>
-                          <p>{new Date(dispute.resolution.resolvedAt).toLocaleDateString()}</p>
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.approvalRate')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.resolution?.approvalRate?.toFixed(1) || 0}%</p>
                         </div>
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.resolved')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: '#0b0b0b' }}>{new Date(dispute.resolution.resolvedAt).toLocaleDateString()}</p>
+                        </div>
+                        <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                          <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.followUp')}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 700, color: dispute.flaggedForReReview ? '#059669' : '#6b7280' }}>
+                            {dispute.flaggedForReReview ? t('dao.flaggedForReReview') : t('dao.noFollowUp')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Vote History on resolved cards too */}
+                      {voteHistory.length > 0 && (
+                        <div style={{ marginTop: 10, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px' }}>
+                          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#52514e' }}>{t('dao.voteHistory')} ({voteHistory.length})</p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {voteHistory.map((v: any, i: number) => (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {v.vote === 'approve'
+                                    ? <CheckCircle style={{ width: 12, height: 12, color: '#059669' }} />
+                                    : <XCircle style={{ width: 12, height: 12, color: '#dc2626' }} />}
+                                  <span style={{ fontFamily: 'ui-monospace, monospace', color: '#6b7280' }}>
+                                    {v.voter ? `${v.voter.slice(0, 6)}...${v.voter.slice(-4)}` : 'Anonymous'}
+                                  </span>
+                                  <span style={{ fontWeight: 600, color: v.vote === 'approve' ? '#059669' : '#dc2626' }}>{v.vote}</span>
+                                </div>
+                                <span style={{ color: '#9ca3af' }}>{new Date(v.timestamp).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          )}
+        </div>
+      )}
+
+      {/* Expired Disputes — #5 */}
+      {daoFilter === 'expired' && (
+        <div className="space-y-4">
+          <h3 className="text-gray-900">{t('dao.expiredDisputes')}</h3>
+          {expiredDisputes.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
+              <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">{t('dao.noExpiredYet')}</p>
+            </div>
+          ) : (
+          <div className="space-y-3">
+            {expiredDisputes.map((dispute) => {
+              const srcStyle = getSourceStyle(dispute);
+              return (
+                <div key={dispute.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-5" style={{ opacity: 0.85 }}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
+                      <h4 className="text-gray-900" style={{ fontSize: 15, margin: 0 }}>{dispute.title}</h4>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: '11.5px', fontWeight: 700, padding: '3px 10px',
+                        borderRadius: 999, border: `1px solid ${srcStyle.borderColor}`,
+                        color: srcStyle.color, background: srcStyle.background,
+                      }}>
+                        {getSourceLabel(dispute)}
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 999, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb' }}>
+                        <Clock style={{ width: 11, height: 11 }} /> {t('dao.expired')}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>{dispute.description}</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                        <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.totalVotes')}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.votes.totalVoters}</p>
+                      </div>
+                      <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                        <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.quorum')}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: '#dc2626' }}>
+                          {dispute.votes.totalVoters}/{QUORUM_THRESHOLD} — {t('dao.quorumNotReached')}
+                        </p>
+                      </div>
+                      <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
+                        <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.deadline')}</p>
+                        <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: '#dc2626' }}>{new Date(dispute.votingDeadline).toLocaleDateString()}</p>
                       </div>
                     </div>
                   </div>
@@ -394,6 +593,7 @@ export function DAOGovernance({
               );
             })}
           </div>
+          )}
         </div>
       )}
 

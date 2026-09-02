@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Shield, Eye, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2 } from 'lucide-react';
+import { AlertTriangle, Shield, Eye, Send, CheckCircle, Clock, MessageSquare, Upload, X, FileText, Image, Video, Coins, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { addProcurementRecordAsync, blockchain } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { generateProof, generateUserSecret, computeCommitment, formatProofForContract } from '../utils/zkProof';
@@ -44,6 +44,8 @@ export function WhistleblowerPortal({
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [referralOpen, setReferralOpen] = useState<string | null>(null);
   const [referralTarget, setReferralTarget] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'investigating' | 'resolved'>('all');
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
   const { t } = useTranslation();
 
   const ROUTING_AUTHORITIES = [
@@ -350,7 +352,7 @@ export function WhistleblowerPortal({
         </div>
         <button
           onClick={() => setShowReportForm(!showReportForm)}
-          className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+          style={{ background: 'linear-gradient(135deg, #0f2942, #1e4976)', color: '#fff', border: 'none', padding: '9px 18px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 2px 8px rgba(15,41,66,.2)' }}
         >
           <AlertTriangle className="w-5 h-5" />
           {t('whistleblower.submitReport')}
@@ -370,7 +372,7 @@ export function WhistleblowerPortal({
       </div>
 
       {/* Protection Features */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: t('whistleblower.zkpProtection'), value: t('whistleblower.zkpSimulated'), icon: Shield, accent: '#059669', bg: '#ecfdf5', iconBg: '#d1fae5', isText: true },
           { label: t('whistleblower.totalReports'), value: whistleblowerReports.length, icon: AlertTriangle, accent: '#dc2626', bg: '#fef2f2', iconBg: '#fee2e2' },
@@ -766,13 +768,40 @@ export function WhistleblowerPortal({
 
       {/* Reports List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <MessageSquare style={{ width: 16, height: 16, color: '#6e6c66' }} />
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{t('whistleblower.allReports')}</h3>
-          <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#f0f0ee', color: '#6e6c66' }}>{whistleblowerReports.length}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MessageSquare style={{ width: 16, height: 16, color: '#6e6c66' }} />
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{t('whistleblower.allReports')}</h3>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#f0f0ee', color: '#6e6c66' }}>{whistleblowerReports.length}</span>
+          </div>
+          {/* Status Filter Tabs */}
+          <div style={{ display: 'flex', gap: 4 }}>
+            {([
+              { key: 'all' as const, label: t('whistleblower.filterAll'), count: whistleblowerReports.length },
+              { key: 'pending' as const, label: t('whistleblower.filterPending'), count: pendingReports.length },
+              { key: 'investigating' as const, label: t('whistleblower.filterInvestigating'), count: underInvestigation.length },
+              { key: 'resolved' as const, label: t('whistleblower.filterResolved'), count: resolvedReports.length },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                style={{
+                  padding: '5px 12px', borderRadius: 999, border: '1px solid',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+                  ...(statusFilter === tab.key
+                    ? { background: '#0f2942', color: '#fff', borderColor: '#0f2942' }
+                    : { background: '#fff', color: '#6e6c66', borderColor: '#e1e0d9' }),
+                }}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </div>
         </div>
 
-        {whistleblowerReports.length === 0 ? (
+        {(() => {
+          const filtered = statusFilter === 'all' ? whistleblowerReports : whistleblowerReports.filter(r => r.investigationStatus === statusFilter);
+          return filtered.length === 0 ? (
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', padding: '48px 24px', textAlign: 'center' }}>
             <AlertTriangle style={{ width: 48, height: 48, color: '#d1d0cc', margin: '0 auto 12px' }} />
             <p style={{ fontSize: 14, color: '#6e6c66', margin: 0 }}>{t('whistleblower.noReports')}</p>
@@ -780,7 +809,7 @@ export function WhistleblowerPortal({
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {whistleblowerReports.map((report) => {
+            {filtered.map((report) => {
               const severityStyle: Record<string, { bg: string; color: string; border: string }> = {
                 low: { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' },
                 medium: { bg: '#fffbeb', color: '#b45309', border: '#fde68a' },
@@ -824,9 +853,76 @@ export function WhistleblowerPortal({
                       </div>
                     </div>
                     <p style={{ margin: 0, fontSize: 13.5, color: '#52514e', lineHeight: 1.5 }}>{report.description}</p>
+                    <button
+                      onClick={() => {
+                        const next = new Set(expandedReports);
+                        next.has(report.id) ? next.delete(report.id) : next.add(report.id);
+                        setExpandedReports(next);
+                      }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8,
+                        fontSize: 12, fontWeight: 600, color: '#0f2942', background: 'transparent',
+                        border: 'none', cursor: 'pointer', padding: 0,
+                      }}
+                    >
+                      {expandedReports.has(report.id)
+                        ? <><ChevronUp style={{ width: 14, height: 14 }} /> {t('whistleblower.hideDetails')}</>
+                        : <><ChevronDown style={{ width: 14, height: 14 }} /> {t('whistleblower.showDetails')}</>}
+                    </button>
                   </div>
 
-                  {/* Report Details */}
+                  {/* Per-report investigation stepper */}
+                  {(() => {
+                    const stageMap: Record<string, number> = {
+                      pending: 1,
+                      investigating: 2,
+                      resolved: 3,
+                    };
+                    const reportStage = report.escalatedToDAO ? 3 : (stageMap[report.investigationStatus] ?? 0);
+                    const stepLabels = [
+                      t('whistleblower.stepSubmitted'),
+                      t('whistleblower.stepPendingReview'),
+                      t('whistleblower.stepInvestigating'),
+                      report.escalatedToDAO ? t('whistleblower.stepEscalated') : t('whistleblower.stepResolved'),
+                    ];
+
+                    return (
+                      <div style={{ padding: '10px 20px', background: '#fafaf9', borderBottom: '1px solid rgba(11,11,11,0.05)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                          {stepLabels.map((label, i, arr) => {
+                            const isCompleted = i < reportStage;
+                            const isCurrent = i === reportStage;
+
+                            const circleBg = isCompleted ? '#059669' : isCurrent ? '#0f2942' : '#e5e7eb';
+                            const circleColor = isCompleted ? '#fff' : isCurrent ? '#c99a3c' : '#9ca3af';
+                            const labelColor = isCompleted ? '#059669' : isCurrent ? '#0f2942' : '#9ca3af';
+                            const lineBg = isCompleted ? '#059669' : '#d1d5db';
+
+                            return (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < arr.length - 1 ? 1 : 'none' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 55 }}>
+                                  <div style={{
+                                    width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: circleBg, color: circleColor, fontSize: 10, fontWeight: 800,
+                                    transition: 'all 0.3s ease',
+                                  }}>
+                                    {isCompleted ? '\u2713' : String(i + 1)}
+                                  </div>
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: labelColor, textAlign: 'center', whiteSpace: 'nowrap', transition: 'color 0.3s ease' }}>{label}</span>
+                                </div>
+                                {i < arr.length - 1 && (
+                                  <div style={{ flex: 1, height: 2, background: lineBg, margin: '0 4px', marginBottom: 16, transition: 'background 0.3s ease' }} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Report Details — collapsible */}
+                  {expandedReports.has(report.id) && (
                   <div style={{ padding: '14px 20px' }}>
                     {/* Meta Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
@@ -879,12 +975,12 @@ export function WhistleblowerPortal({
                           <Coins style={{ width: 14, height: 14, color: report.rewards.status === 'awarded' ? '#059669' : '#d97706' }} />
                           <span style={{ fontSize: 13, color: report.rewards.status === 'awarded' ? '#065f46' : '#92400e' }}>
                             {report.rewards.status === 'awarded'
-                              ? `${t('whistleblower.rewardReceived')} (${report.rewards.amount} TOK)`
+                              ? `${t('whistleblower.rewardReceived')} (${report.rewards.amount} PROC)`
                               : t('whistleblower.rewardPendingInvestigation')}
                           </span>
                         </div>
                         {report.rewards.status === 'awarded' && report.rewards.amount > 0 && (
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>+{report.rewards.amount} TOK</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#059669' }}>+{report.rewards.amount} PROC</span>
                         )}
                       </div>
                     )}
@@ -931,7 +1027,8 @@ export function WhistleblowerPortal({
                       </div>
                     )}
 
-                    {/* Actions */}
+                    {/* Actions — only oversight/auditor can refer or escalate */}
+                    {(userRole === 'oversight' || userRole === 'auditor') && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <button
                         onClick={() => setReferralOpen(referralOpen === report.id ? null : report.id)}
@@ -966,6 +1063,7 @@ export function WhistleblowerPortal({
                         </span>
                       )}
                     </div>
+                    )}
 
                     {/* Referral Dropdown */}
                     {referralOpen === report.id && (
@@ -1013,11 +1111,13 @@ export function WhistleblowerPortal({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        )}
+        );
+        })()}
       </div>
 
     </div>
