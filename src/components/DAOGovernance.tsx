@@ -475,11 +475,11 @@ export function DAOGovernance({
               const srcStyle = getSourceStyle(dispute);
               const voteHistory = getVoteHistory(dispute.id);
               return (
-                <div key={dispute.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
-                        <h4 className="text-gray-900" style={{ fontSize: 15, margin: 0 }}>{dispute.title}</h4>
+                <div key={dispute.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: '20px 20px 16px' }}>
+                  <div>
+                    <div>
+                      <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0b0b0b', lineHeight: 1.4 }}>{dispute.title}</h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
                           fontSize: '11.5px', fontWeight: 700, padding: '3px 10px',
@@ -488,17 +488,20 @@ export function DAOGovernance({
                         }}>
                           {getSourceLabel(dispute)}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                          dispute.resolution.decision === 'approved'
-                            ? 'bg-green-100 text-green-900'
-                            : 'bg-red-100 text-red-900'
-                        }`}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center',
+                          fontSize: '11.5px', fontWeight: 700, padding: '3px 10px',
+                          borderRadius: 999,
+                          color: dispute.resolution.decision === 'approved' ? '#065f46' : '#991b1b',
+                          background: dispute.resolution.decision === 'approved' ? '#dcfce7' : '#fee2e2',
+                          border: `1px solid ${dispute.resolution.decision === 'approved' ? '#86efac' : '#fca5a5'}`,
+                        }}>
                           {dispute.resolution.decision}
                         </span>
                         {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
                         ) : blockchainRecords.some(r => r.disputeId === dispute.id) ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }}>● Simulated</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: 999, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }}>● Simulated</span>
                         ) : null}
                       </div>
                       {(dispute.sourceDisputeId || dispute.sourceReportId) && (
@@ -574,10 +577,10 @@ export function DAOGovernance({
             {expiredDisputes.map((dispute) => {
               const srcStyle = getSourceStyle(dispute);
               return (
-                <div key={dispute.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-5" style={{ opacity: 0.85 }}>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
-                      <h4 className="text-gray-900" style={{ fontSize: 15, margin: 0 }}>{dispute.title}</h4>
+                <div key={dispute.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: '20px 20px 16px', opacity: 0.85 }}>
+                  <div>
+                    <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0b0b0b', lineHeight: 1.4 }}>{dispute.title}</h4>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4,
                         fontSize: '11.5px', fontWeight: 700, padding: '3px 10px',
@@ -591,7 +594,7 @@ export function DAOGovernance({
                       </span>
                     </div>
                     <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>{dispute.description}</p>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                       <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
                         <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.totalVotes')}</p>
                         <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.votes.totalVoters}</p>
