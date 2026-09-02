@@ -107,7 +107,7 @@ export function DAOGovernance({
   // Categorise disputes
   const activeDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && !isDeadlinePassed(d));
   const expiredDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && isDeadlinePassed(d));
-  const resolvedDisputes = disputes.filter((d) => d.status === 'resolved' && d.resolution);
+  const resolvedDisputes = disputes.filter((d) => d.status === 'resolved' && d.resolution && typeof d.resolution === 'object');
 
   // Unique voters from blockchain records
   const uniqueVoters = new Set(
@@ -323,7 +323,7 @@ export function DAOGovernance({
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
                         <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
                           <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.totalVotes')}</p>
                           <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.votes.totalVoters}</p>
@@ -507,7 +507,7 @@ export function DAOGovernance({
                           {t('dao.sourceCase')}: {dispute.sourceDisputeId || dispute.sourceReportId}
                         </div>
                       )}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-gray-600">
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                         <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
                           <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.totalVotes')}</p>
                           <p style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0b0b0b' }}>{dispute.votes.totalVoters}</p>
@@ -518,7 +518,7 @@ export function DAOGovernance({
                         </div>
                         <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
                           <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.resolved')}</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: '#0b0b0b' }}>{new Date(dispute.resolution.resolvedAt).toLocaleDateString()}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: '#0b0b0b' }}>{dispute.resolution?.resolvedAt ? new Date(dispute.resolution.resolvedAt).toLocaleDateString() : '—'}</p>
                         </div>
                         <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
                           <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.followUp')}</p>

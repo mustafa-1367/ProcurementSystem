@@ -815,7 +815,12 @@ export function generateDemoData() {
       stage: 5,
       votes: { approve: 3, reject: 7, totalVoters: 10 },
       votingDeadline: isoAgo(31),
-      resolution: 'Objection reviewed by the Evaluation Committee. Scoring methodology confirmed compliant with procurement guidelines. ISO 14001 was credited under the qualification stage but is not a separate technical scoring criterion. Objection dismissed.',
+      resolution: {
+        decision: 'rejected',
+        approvalRate: 30,
+        resolvedAt: isoAgo(31),
+        summary: 'Objection reviewed by the Evaluation Committee. Scoring methodology confirmed compliant with procurement guidelines. ISO 14001 was credited under the qualification stage but is not a separate technical scoring criterion. Objection dismissed.',
+      },
       routingDecision: null,
       flaggedForReReview: false,
     },
