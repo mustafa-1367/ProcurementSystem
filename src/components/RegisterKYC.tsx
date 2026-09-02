@@ -27,11 +27,8 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
   });
 
   const registered = registeredSuppliers.some(
-    (s) => s.companyName === form.companyName && s.email === form.email && form.companyName !== ''
-  ) || registeredSuppliers.length > 0 && form.companyName === '';
-
-  // Check if there's already a registration (show success if so)
-  const hasRegistration = registeredSuppliers.length > 0;
+    (s) => s.companyName?.toLowerCase().trim() === form.companyName?.toLowerCase().trim() && form.companyName !== ''
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

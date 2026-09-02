@@ -5,10 +5,17 @@ interface MyContractsProps {
   contracts: any[];
   bids: any[];
   tenders: any[];
+  registeredSuppliers?: any[];
 }
 
-export function MyContracts({ contracts, bids, tenders }: MyContractsProps) {
+export function MyContracts({ contracts, bids, tenders, registeredSuppliers = [] }: MyContractsProps) {
   const { t } = useTranslation();
+
+  // Filter contracts to only show current supplier's contracts
+  const supplierNames = registeredSuppliers.map((s: any) => s.companyName?.toLowerCase());
+  const filteredContracts = supplierNames.length > 0
+    ? contracts.filter((c: any) => supplierNames.includes(c.vendorName?.toLowerCase()))
+    : contracts; // fallback: show all for demo when no suppliers registered
 
   const statusIcon = (status: string) => {
     switch (status) {
@@ -36,15 +43,15 @@ export function MyContracts({ contracts, bids, tenders }: MyContractsProps) {
       {/* Summary Stats — Sharakat Chain style */}
       <div className="mobile-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16 }}>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{contracts.length}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{filteredContracts.length}</div>
           <div style={{ color: '#6e6c66', fontSize: 12, marginTop: 2 }}>{t('myContracts.totalContracts')}</div>
         </div>
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16 }}>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{contracts.filter(c => c.status === 'active').length}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{filteredContracts.filter(c => c.status === 'active').length}</div>
           <div style={{ color: '#6e6c66', fontSize: 12, marginTop: 2 }}>{t('myContracts.activeContracts')}</div>
         </div>
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 16 }}>
-          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{contracts.filter(c => c.status === 'completed').length}</div>
+          <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', color: '#0b0b0b' }}>{filteredContracts.filter(c => c.status === 'completed').length}</div>
           <div style={{ color: '#6e6c66', fontSize: 12, marginTop: 2 }}>{t('myContracts.completedContracts')}</div>
         </div>
       </div>
@@ -55,11 +62,11 @@ export function MyContracts({ contracts, bids, tenders }: MyContractsProps) {
           <Briefcase className="w-5 h-5 text-blue-600" />
           <h3 className="text-gray-900 font-semibold">{t('myContracts.listTitle')}</h3>
         </div>
-        {contracts.length === 0 ? (
+        {filteredContracts.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">{t('myContracts.noContracts')}</div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {contracts.map((contract: any) => (
+            {filteredContracts.map((contract: any) => (
               <div key={contract.id} className="px-6 py-4">
                 <div className="flex items-center justify-between mb-2">
                   <div>

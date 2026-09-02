@@ -213,7 +213,9 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
       {/* Header */}
       <div>
         <h1 style={{ margin: '0 0 6px 0', fontWeight: 700, fontSize: 26, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('disputes.title')}</h1>
-        <p style={{ margin: '0 0 10px 0', color: '#52514e' }}>{t('disputes.subtitle')}</p>
+        <p style={{ margin: '0 0 10px 0', color: '#52514e' }}>
+          {userRole === 'government' ? t('disputes.subtitleGov') : t('disputes.subtitle')}
+        </p>
       </div>
 
       {/* Supplier: Objection Form */}
@@ -407,18 +409,22 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
                     {userRole === 'supplier' && (
                       <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
                         {dispute.status === 'rejected' && !dispute.escalatedToDAO && (
-                          <button
-                            onClick={() => handleEscalateToDAO(dispute)}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 5,
-                              padding: '6px 12px', borderRadius: 8, border: '1px solid #c99a3c',
-                              background: '#fef9e7', color: '#78350f', fontSize: 12, fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            <ArrowUpRight style={{ width: 13, height: 13 }} />
-                            {t('disputes.escalateToDAO')}
-                          </button>
+                          <div>
+                            <button
+                              onClick={() => handleEscalateToDAO(dispute)}
+                              title={t('disputes.escalateHint')}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                padding: '6px 12px', borderRadius: 8, border: '1px solid #c99a3c',
+                                background: '#fef9e7', color: '#78350f', fontSize: 12, fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <ArrowUpRight style={{ width: 13, height: 13 }} />
+                              {t('disputes.escalateToDAO')}
+                            </button>
+                            <div style={{ fontSize: 11, color: '#6e6c66', marginTop: 3, maxWidth: 180 }}>{t('disputes.escalateHint')}</div>
+                          </div>
                         )}
                         {dispute.escalatedToDAO && (
                           <span style={{ fontSize: 12, fontWeight: 700, color: '#8a5a12' }}>

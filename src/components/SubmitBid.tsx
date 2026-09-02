@@ -32,7 +32,6 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
   const myBids = bids;
   const isRegisteredByName = (name: string) =>
     registeredSuppliers.some((s) => s.companyName?.toLowerCase().trim() === name?.toLowerCase().trim());
-  const isEligible = registeredSuppliers.length > 0;
 
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +240,6 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                     </button>
                     <button
                       onClick={() => {
-                        if (!isEligible) { setEligibilityError(true); return; }
                         setEligibilityError(false);
                         setSelectedTender(tender);
                         setShowBidForm(true);
@@ -373,6 +371,16 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                         outline: 'none', background: '#fff', color: '#0b0b0b',
                       }}
                     />
+                    {bidForm.vendorName.trim().length > 2 && !isRegisteredByName(bidForm.vendorName) && (
+                      <div style={{ fontSize: 11.5, color: '#b91c1c', marginTop: 4, fontWeight: 600 }}>
+                        This company is not registered. Complete e-KYC registration first.
+                      </div>
+                    )}
+                    {bidForm.vendorName.trim().length > 2 && isRegisteredByName(bidForm.vendorName) && (
+                      <div style={{ fontSize: 11.5, color: '#059669', marginTop: 4, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle style={{ width: 12, height: 12 }} /> Registered & eligible
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>

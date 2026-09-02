@@ -27,6 +27,9 @@ export const en = {
     screenReaderDesc: 'A screen reader is a program that interprets screen content and conveys it as audio. The content on this platform has been created with semantic HTML so that screen readers can understand the structure and present information in a logical order.',
     freeBuiltIn: 'free, built-in',
     free: 'free',
+    darkMode: 'Dark Mode',
+    darkModeEnabled: 'Dark Mode Enabled',
+    enableDarkMode: 'Enable Dark Mode',
     resetDefault: 'Reset to Default',
     confirmChoice: 'Confirm Choice',
     moreGuides: 'More detailed guides on this topic are available at',
@@ -304,7 +307,7 @@ export const en = {
     verified: 'Verified',
     ofBudget: '% of budget',
     evaluated: 'Evaluated',
-    pending: 'Simulated',
+    pending: 'Pending',
     afn: 'AFN',
   },
 
@@ -764,9 +767,9 @@ export const en = {
   // SupplierTracker
   supplier: {
     title: 'Supplier Tracking Panel',
-    subtitle: 'Track your bids, objections, and audit reports in one place',
-    searchLabel: 'Your Company/Vendor Name',
-    searchPlaceholder: 'Enter your company name to view your records...',
+    subtitle: 'Track supplier bids, objections, and audit reports',
+    searchLabel: 'Company / Vendor Name',
+    searchPlaceholder: 'Enter a company name to view their records...',
     myBids: 'My Bids',
     bidsDesc: 'Submitted proposals & tenders',
     myContracts: 'My Contracts',
@@ -808,7 +811,7 @@ export const en = {
     approved: 'Approved',
     rejected: 'Rejected',
     infoTitle: 'Supplier Tracking Information',
-    infoText: 'This panel provides a consolidated view of all your procurement activities. Enter your company name to track bid statuses, monitor objection proceedings, and access audit reports. All records are blockchain-verified for transparency and accountability.',
+    infoText: 'This panel provides a consolidated view of supplier procurement activities. Enter a company name to track bid statuses, monitor objection proceedings, and access audit reports. All records are blockchain-verified for transparency and accountability.',
   },
 
   // Help & Support
@@ -1034,7 +1037,9 @@ export const en = {
     rejectObjection: 'Reject',
     escalateToDAO: 'Escalate to DAO',
     escalatedToDAO: 'Escalated to DAO',
+    escalateHint: 'Submit to DAO for community vote — DAO members will decide by majority.',
     colActions: 'Actions',
+    subtitleGov: 'Review supplier objections and decide whether to accept or reject them.',
   },
 
   // Common

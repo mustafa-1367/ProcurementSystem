@@ -863,6 +863,7 @@ function AppContent() {
             contracts={contracts}
             bids={bids}
             tenders={tenders}
+            registeredSuppliers={registeredSuppliers}
           />
         )}
         {activePhase === 'disputes' && (
@@ -1024,7 +1025,7 @@ function AppContent() {
 
               {/* Dark Mode Section */}
               <h3 style={{ fontSize: 17, fontWeight: 600, color: '#1d4ed8', marginBottom: 12, marginTop: 24 }}>
-                Dark Mode
+                {t('a11y.darkMode')}
               </h3>
               <button
                 onClick={() => { const next = !pendingDarkMode; setPendingDarkMode(next); if (next) setPendingHighContrast(false); }}
@@ -1048,7 +1049,7 @@ function AppContent() {
                   )}
                 </div>
                 <span style={{ fontSize: 13, fontWeight: 600, color: pendingDarkMode ? '#a5b4fc' : '#0f2942' }}>
-                  {pendingDarkMode ? 'Dark Mode Enabled' : 'Enable Dark Mode'}
+                  {pendingDarkMode ? t('a11y.darkModeEnabled') : t('a11y.enableDarkMode')}
                 </span>
               </button>
 
