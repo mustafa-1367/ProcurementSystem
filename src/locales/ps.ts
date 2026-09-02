@@ -59,6 +59,7 @@ export const ps = {
     tendering: 'داوطلبي',
     postTender: 'وروسته له داوطلبۍ',
     publicAudit: 'عامه پلټنه',
+    auditRecords: 'د پلټنې سوابق',
     daoGovernance: 'د شخړو حل DAO',
     whistleblower: 'خبرورکوونکی',
     reputation: 'شهرت',

@@ -59,6 +59,7 @@ export const fa = {
     tendering: 'داوطلبی',
     postTender: 'پس‌از داوطلبی',
     publicAudit: 'بازرسی عامه',
+    auditRecords: 'سوابق بازرسی',
     daoGovernance: 'DAO حل اختلاف',
     whistleblower: 'گزارش‌دهی',
     reputation: 'شهرت',

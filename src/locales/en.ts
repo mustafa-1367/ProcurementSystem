@@ -60,6 +60,7 @@ export const en = {
     tendering: 'Tendering',
     postTender: 'Post-Tender',
     publicAudit: 'Public Audit',
+    auditRecords: 'Audit Records',
     daoGovernance: 'Dispute Resolution DAO',
     whistleblower: 'Whistleblower',
     reputation: 'Reputation',
