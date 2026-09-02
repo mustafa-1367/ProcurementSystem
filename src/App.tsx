@@ -572,7 +572,7 @@ function AppContent() {
             >
               {visibleTabs.map((tab, index) => {
                 const isActive = activePhase === tab.id;
-                const navKey = tab.id === 'dashboard' ? (userRole === 'supplier' ? 'myDashboard' : userRole === 'government' ? 'tenderManagement' : userRole === 'citizen' ? 'home' : userRole === 'auditor' ? 'auditOverview' : userRole === 'oversight' ? 'oversightOverview' : 'procurement') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id;
+                const navKey = tab.id === 'dashboard' ? (userRole === 'citizen' ? 'home' : 'myDashboard') : tab.id === 'pre' ? 'preTender' : tab.id === 'tender' ? 'tendering' : tab.id === 'post' ? 'postTender' : tab.id === 'audit' ? 'publicAudit' : tab.id === 'dao' ? 'daoGovernance' : tab.id === 'supplier' ? 'supplierTracker' : tab.id === 'submitBid' ? 'submitBid' : tab.id === 'myContracts' ? 'myContracts' : tab.id === 'disputes' ? 'disputes' : tab.id;
                 return (
                   <button
                     key={tab.id}
