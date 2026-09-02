@@ -54,7 +54,7 @@ const allTabs = [
 ];
 
 const roleTabs: Record<UserRole, string[]> = {
-  government: ['dashboard', 'pre', 'tender', 'post', 'audit', 'reputation'],
+  government: ['dashboard', 'pre', 'tender', 'post', 'disputes', 'audit', 'reputation'],
   supplier:   ['dashboard', 'register', 'submitBid', 'myContracts', 'disputes', 'reputation', 'whistleblower'],
   citizen:    ['dashboard', 'audit', 'whistleblower', 'reputation'],
   auditor:    ['dashboard', 'supplier', 'reputation', 'whistleblower', 'dao'],
@@ -807,8 +807,6 @@ function AppContent() {
             contracts={contracts}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
-            reports={reports}
-            setReports={setReports}
           />
         )}
         {activePhase === 'whistleblower' && (
@@ -875,6 +873,7 @@ function AppContent() {
             tenders={tenders}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
+            userRole={userRole}
           />
         )}
         {activePhase === 'help' && (

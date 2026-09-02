@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Scale, FileUp, CheckCircle, Clock, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { Scale, FileUp, CheckCircle, Clock, AlertTriangle, X, Loader2, ArrowUpRight, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
 import { TxHashLink } from './TxHashLink';
@@ -11,9 +11,10 @@ interface DisputesAppealsProps {
   tenders: any[];
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
+  userRole: string;
 }
 
-export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, setBlockchainRecords, blockchainRecords }: DisputesAppealsProps) {
+export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, setBlockchainRecords, blockchainRecords, userRole }: DisputesAppealsProps) {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<{ objectionId: string; txHash: string; onChain: boolean; tenderTitle: string } | null>(null);
@@ -38,13 +39,11 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
       description: form.grounds,
       relatedId: form.tenderId,
       grounds: form.grounds,
-      type: 'oversight_complaint',
-      status: 'voting',
+      type: 'objection',
+      status: 'filed',
       filedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       stage: 1,
-      votes: { approve: 0, reject: 0, totalVoters: 0 },
-      votingDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       resolution: null,
       routingDecision: null,
       flaggedForReReview: false,
@@ -84,35 +83,130 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
     setForm({ tenderId: '', grounds: '', evidence: null });
   };
 
-  const stageLabel = (stage: number) => {
-    const stages = [
-      t('disputes.stageFiled'),
-      t('disputes.stageReview'),
-      t('disputes.stageInvestigation'),
-      t('disputes.stageDAOEscalation'),
-      t('disputes.stageResolved'),
-    ];
-    return stages[stage - 1] || '';
+  // Government: accept objection → mark as accepted, flag for re-review
+  const handleAcceptObjection = async (dispute: any) => {
+    const updated = disputes.map(d =>
+      d.id === dispute.id ? { ...d, status: 'accepted', reviewDecision: 'accepted', flaggedForReReview: true, routingDecision: 'evaluation_committee', reviewedAt: new Date().toISOString() } : d
+    );
+    setDisputes(updated);
+
+    const { block, contract, onChain } = await addProcurementRecordAsync('objection_review', {
+      disputeId: dispute.id,
+      decision: 'accepted',
+      timestamp: Date.now(),
+    });
+
+    setBlockchainRecords([...blockchainRecords, {
+      id: block.hash,
+      type: 'objection_accepted',
+      disputeId: dispute.id,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    }]);
   };
 
-  const stageStyle = (status: string) => {
+  // Government: reject objection → mark as rejected
+  const handleRejectObjection = async (dispute: any) => {
+    const updated = disputes.map(d =>
+      d.id === dispute.id ? { ...d, status: 'rejected', reviewDecision: 'rejected', reviewedAt: new Date().toISOString() } : d
+    );
+    setDisputes(updated);
+
+    const { block, contract, onChain } = await addProcurementRecordAsync('objection_review', {
+      disputeId: dispute.id,
+      decision: 'rejected',
+      timestamp: Date.now(),
+    });
+
+    setBlockchainRecords([...blockchainRecords, {
+      id: block.hash,
+      type: 'objection_rejected',
+      disputeId: dispute.id,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    }]);
+  };
+
+  // Supplier: escalate rejected objection to DAO
+  const handleEscalateToDAO = async (dispute: any) => {
+    const escalated = {
+      id: `DAO-${Date.now()}`,
+      title: `Escalated: ${dispute.title}`,
+      description: dispute.grounds || dispute.description,
+      relatedId: dispute.tenderId || dispute.relatedId || '',
+      tenderId: dispute.tenderId,
+      tenderTitle: dispute.tenderTitle,
+      type: 'escalated_objection',
+      status: 'voting',
+      sourceDisputeId: dispute.id,
+      createdAt: new Date().toISOString(),
+      votes: { approve: 0, reject: 0, totalVoters: 0 },
+      votingDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      resolution: null,
+      routingDecision: null,
+      flaggedForReReview: false,
+    };
+
+    const { block, contract, onChain } = await addProcurementRecordAsync('dao_escalation', {
+      disputeId: escalated.id,
+      sourceDisputeId: dispute.id,
+      title: escalated.title,
+      escalated: true,
+    });
+
+    setBlockchainRecords([...blockchainRecords, {
+      id: block.hash,
+      type: 'objection_escalated',
+      disputeId: escalated.id,
+      sourceDisputeId: dispute.id,
+      contractId: contract.id,
+      transactionHash: contract.transactionHash,
+      timestamp: new Date().toISOString(),
+      verified: onChain,
+      simulated: !onChain,
+      onChain,
+    }]);
+
+    // Add escalated dispute and mark original as escalated
+    const updatedDisputes = disputes.map(d =>
+      d.id === dispute.id ? { ...d, status: 'escalated', escalatedToDAO: true, escalatedDisputeId: escalated.id } : d
+    );
+    setDisputes([...updatedDisputes, escalated]);
+  };
+
+  const statusLabel = (status: string) => {
     switch (status) {
-      case 'resolved': return 'bg-green-50 text-green-700 border-green-200';
-      case 'filed': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'under_review': return 'bg-yellow-50 text-yellow-700 border-yellow-200';
-      case 'escalated': return 'bg-orange-50 text-orange-700 border-orange-200';
-      default: return 'bg-gray-50 text-gray-600 border-gray-200';
+      case 'filed': return t('disputes.statusFiled');
+      case 'accepted': return t('disputes.statusAccepted');
+      case 'rejected': return t('disputes.statusRejected');
+      case 'escalated': return t('disputes.statusEscalated');
+      case 'resolved': return t('disputes.statusResolved');
+      default: return status;
     }
   };
 
-  const stageIcon = (status: string) => {
+  const statusStyle = (status: string) => {
     switch (status) {
-      case 'resolved': return <CheckCircle className="w-3.5 h-3.5" />;
-      case 'filed': return <Clock className="w-3.5 h-3.5" />;
-      case 'escalated': return <AlertTriangle className="w-3.5 h-3.5" />;
-      default: return <Clock className="w-3.5 h-3.5" />;
+      case 'filed': return { color: '#1c5cab', background: '#eef5fd', borderColor: '#bcd6f5' };
+      case 'accepted': return { color: '#0a6b0a', background: '#eaf8ea', borderColor: '#c7ecc7' };
+      case 'rejected': return { color: '#b91c1c', background: '#fef2f2', borderColor: '#fecaca' };
+      case 'escalated': return { color: '#8a5a12', background: '#fdf3df', borderColor: '#f0dcae' };
+      case 'resolved': return { color: '#0a6b0a', background: '#eaf8ea', borderColor: '#c7ecc7' };
+      default: return { color: '#52514e', background: '#f0efec', borderColor: '#e1e0d9' };
     }
   };
+
+  // Filter objections only (not escalated DAO items)
+  const objections = disputes.filter(d => d.type === 'objection');
+  const filedObjections = objections.filter(d => d.status === 'filed');
 
   return (
     <div className="space-y-6">
@@ -122,103 +216,152 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
         <p style={{ margin: '0 0 10px 0', color: '#52514e' }}>{t('disputes.subtitle')}</p>
       </div>
 
-      {/* Two-column layout: Form + Info card */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Objection Form — matches Sharakat Chain .card + .form-row + .btn-primary */}
-        <div style={{
-          background: '#fcfcfb',
-          border: '1px solid rgba(11,11,11,0.10)',
-          borderRadius: 10,
-          padding: 18,
-        }}>
-          <form onSubmit={handleSubmit}>
-            {/* Related tender */}
-            <div style={{ marginBottom: 13 }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#52514e', marginBottom: 5 }}>
-                {t('disputes.relatedTender')}
-              </label>
-              {tenders.length > 0 ? (
-                <select
-                  value={form.tenderId}
-                  onChange={(e) => setForm({ ...form, tenderId: e.target.value })}
-                  style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff' }}
-                  required
-                >
-                  <option value="">{t('disputes.selectTender')}</option>
-                  {tenders.map((td: any) => (
-                    <option key={td.id} value={td.id}>{td.id} — {td.title}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  value={form.tenderId}
-                  onChange={(e) => setForm({ ...form, tenderId: e.target.value })}
-                  placeholder={t('disputes.tenderPlaceholder')}
-                  style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff' }}
+      {/* Supplier: Objection Form */}
+      {(userRole === 'supplier') && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div style={{
+            background: '#fcfcfb',
+            border: '1px solid rgba(11,11,11,0.10)',
+            borderRadius: 10,
+            padding: 18,
+          }}>
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: 13 }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#52514e', marginBottom: 5 }}>
+                  {t('disputes.relatedTender')}
+                </label>
+                {tenders.length > 0 ? (
+                  <select
+                    value={form.tenderId}
+                    onChange={(e) => setForm({ ...form, tenderId: e.target.value })}
+                    style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff' }}
+                    required
+                  >
+                    <option value="">{t('disputes.selectTender')}</option>
+                    {tenders.map((td: any) => (
+                      <option key={td.id} value={td.id}>{td.id} — {td.title}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.tenderId}
+                    onChange={(e) => setForm({ ...form, tenderId: e.target.value })}
+                    placeholder={t('disputes.tenderPlaceholder')}
+                    style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff' }}
+                    required
+                  />
+                )}
+              </div>
+
+              <div style={{ marginBottom: 13 }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#52514e', marginBottom: 5 }}>
+                  {t('disputes.groundsLabel')}
+                </label>
+                <textarea
+                  value={form.grounds}
+                  onChange={(e) => setForm({ ...form, grounds: e.target.value })}
+                  rows={4}
+                  placeholder={t('disputes.groundsPlaceholder')}
+                  style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff', resize: 'vertical' }}
                   required
                 />
-              )}
-            </div>
+              </div>
 
-            {/* Grounds for objection */}
-            <div style={{ marginBottom: 13 }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#52514e', marginBottom: 5 }}>
-                {t('disputes.groundsLabel')}
-              </label>
-              <textarea
-                value={form.grounds}
-                onChange={(e) => setForm({ ...form, grounds: e.target.value })}
-                rows={4}
-                placeholder={t('disputes.groundsPlaceholder')}
-                style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff', resize: 'vertical' }}
-                required
-              />
-            </div>
+              <div style={{ marginBottom: 13 }}>
+                <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#52514e', marginBottom: 5 }}>
+                  {t('disputes.evidenceLabel')}
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setForm({ ...form, evidence: e.target.files?.[0] || null })}
+                  style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff' }}
+                />
+              </div>
 
-            {/* Supporting evidence */}
-            <div style={{ marginBottom: 13 }}>
-              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#52514e', marginBottom: 5 }}>
-                {t('disputes.evidenceLabel')}
-              </label>
-              <input
-                type="file"
-                multiple
-                onChange={(e) => setForm({ ...form, evidence: e.target.files?.[0] || null })}
-                style={{ width: '100%', padding: '9px 11px', border: '1px solid #c3c2b7', borderRadius: 7, fontSize: '13.5px', fontFamily: 'inherit', background: '#fff' }}
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  borderRadius: 8, padding: '9px 15px', fontSize: '13.5px', fontWeight: 700,
+                  cursor: submitting ? 'wait' : 'pointer', border: '1px solid transparent', transition: '.15s',
+                  background: '#0f2942', color: '#fff', opacity: submitting ? 0.7 : 1,
+                }}
+                onMouseEnter={(e) => { if (!submitting) (e.target as HTMLElement).style.background = '#173d61'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#0f2942'; }}
+              >
+                {submitting && <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />}
+                {submitting ? t('disputes.submitting') : t('disputes.fileObjection')}
+              </button>
+            </form>
+          </div>
 
-            <button
-              type="submit"
-              disabled={submitting}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                borderRadius: 8, padding: '9px 15px', fontSize: '13.5px', fontWeight: 700,
-                cursor: submitting ? 'wait' : 'pointer', border: '1px solid transparent', transition: '.15s',
-                background: '#0f2942', color: '#fff', opacity: submitting ? 0.7 : 1,
-              }}
-              onMouseEnter={(e) => { if (!submitting) (e.target as HTMLElement).style.background = '#173d61'; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#0f2942'; }}
-            >
-              {submitting && <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />}
-              {submitting ? t('disputes.submitting') : t('disputes.fileObjection')}
-            </button>
-          </form>
+          <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
+            <h2 style={{ margin: '0 0 6px 0', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>
+              {t('disputes.objectionWindowTitle')}
+            </h2>
+            <p style={{ margin: '0 0 10px 0', color: '#52514e', fontSize: 15, lineHeight: 1.5 }}>
+              {t('disputes.objectionWindowDesc')}
+            </p>
+          </div>
         </div>
+      )}
 
-        {/* Info Card — Objection Window (Sharakat Chain .card style) */}
+      {/* Government: Review Panel for filed objections */}
+      {userRole === 'government' && filedObjections.length > 0 && (
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
-          <h2 style={{ margin: '0 0 6px 0', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>
-            {t('disputes.objectionWindowTitle')}
+          <h2 style={{ margin: '0 0 12px 0', fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>
+            {t('disputes.governmentReviewTitle')}
           </h2>
-          <p style={{ margin: '0 0 10px 0', color: '#52514e', fontSize: 15, lineHeight: 1.5 }}>
-            {t('disputes.objectionWindowDesc')}
-          </p>
+          <div className="space-y-3">
+            {filedObjections.map((dispute: any) => (
+              <div key={dispute.id} style={{
+                background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#0f2942', marginBottom: 4 }}>{dispute.title}</div>
+                  <div style={{ fontSize: 13, color: '#52514e', marginBottom: 4 }}>{dispute.grounds || dispute.description}</div>
+                  <div style={{ fontSize: 12, color: '#6e6c66' }}>
+                    {dispute.tenderTitle} • {new Date(dispute.filedAt || dispute.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                  <button
+                    onClick={() => handleAcceptObjection(dispute)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '8px 14px', borderRadius: 8, border: '1px solid #059669',
+                      background: '#ecfdf5', color: '#059669', fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <ThumbsUp style={{ width: 14, height: 14 }} />
+                    {t('disputes.acceptObjection')}
+                  </button>
+                  <button
+                    onClick={() => handleRejectObjection(dispute)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      padding: '8px 14px', borderRadius: 8, border: '1px solid #dc2626',
+                      background: '#fef2f2', color: '#dc2626', fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <ThumbsDown style={{ width: 14, height: 14 }} />
+                    {t('disputes.rejectObjection')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filed Objections List */}
-      {disputes.length > 0 && (
+      {objections.length > 0 && (
         <div style={{ background: '#fcfcfb', border: '1px solid rgba(11,11,11,0.10)', borderRadius: 10, padding: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <h2 style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: '-0.01em', color: '#0b0b0b' }}>{t('disputes.listTitle')}</h2>
@@ -231,40 +374,62 @@ export function DisputesAppeals({ disputes, setDisputes, contracts, tenders, set
                 <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colGrounds')}</th>
                 <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colDate')}</th>
                 <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colStatus')}</th>
+                {userRole === 'supplier' && (
+                  <th style={{ textAlign: 'left', color: '#6e6c66', fontWeight: 600, fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #e1e0d9', padding: '8px 10px' }}>{t('disputes.colActions')}</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {disputes.map((dispute: any, idx: number) => (
-                <tr key={dispute.id} style={{ background: 'transparent' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#f8f8f6'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
-                  <td style={{ padding: 10, borderBottom: idx === disputes.length - 1 ? 'none' : '1px solid #e1e0d9', fontFamily: 'ui-monospace, monospace', fontSize: '12px' }}>{dispute.id}</td>
-                  <td style={{ padding: 10, borderBottom: idx === disputes.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
-                    <strong>{dispute.tenderTitle || dispute.contractTitle || ''}</strong>
-                    <br /><span style={{ fontSize: '12.5px', color: '#6e6c66' }}>{dispute.tenderId || dispute.contractId || ''}</span>
-                  </td>
-                  <td style={{ padding: 10, borderBottom: idx === disputes.length - 1 ? 'none' : '1px solid #e1e0d9', color: '#52514e' }}>{dispute.grounds || dispute.reason || ''}</td>
-                  <td style={{ padding: 10, borderBottom: idx === disputes.length - 1 ? 'none' : '1px solid #e1e0d9', color: '#6e6c66', fontSize: '12.5px' }}>{new Date(dispute.filedAt || dispute.createdAt).toLocaleDateString()}</td>
-                  <td style={{ padding: 10, borderBottom: idx === disputes.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, border: '1px solid',
-                      ...(dispute.status === 'filed' ? { color: '#1c5cab', background: '#eef5fd', borderColor: '#bcd6f5' } :
-                          dispute.status === 'resolved' ? { color: '#0a6b0a', background: '#eaf8ea', borderColor: '#c7ecc7' } :
-                          dispute.status === 'escalated' ? { color: '#8a5a12', background: '#fdf3df', borderColor: '#f0dcae' } :
-                          { color: '#52514e', background: '#f0efec', borderColor: '#e1e0d9' }),
-                    }}>
-                      {dispute.status === 'filed' ? t('disputes.statusFiled') :
-                       dispute.status === 'under_review' ? t('disputes.statusReview') :
-                       dispute.status === 'escalated' ? t('disputes.statusEscalated') :
-                       dispute.status === 'resolved' ? t('disputes.statusResolved') :
-                       dispute.status}
-                    </span>
-                    {' '}
-                    {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+              {objections.map((dispute: any, idx: number) => {
+                const sStyle = statusStyle(dispute.status);
+                return (
+                  <tr key={dispute.id} style={{ background: 'transparent' }} onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#f8f8f6'; }} onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}>
+                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9', fontFamily: 'ui-monospace, monospace', fontSize: '12px' }}>{dispute.id}</td>
+                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
+                      <strong>{dispute.tenderTitle || dispute.contractTitle || ''}</strong>
+                      <br /><span style={{ fontSize: '12.5px', color: '#6e6c66' }}>{dispute.tenderId || dispute.contractId || ''}</span>
+                    </td>
+                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9', color: '#52514e' }}>{dispute.grounds || dispute.reason || ''}</td>
+                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9', color: '#6e6c66', fontSize: '12.5px' }}>{new Date(dispute.filedAt || dispute.createdAt).toLocaleDateString()}</td>
+                    <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, border: '1px solid',
+                        color: sStyle.color, background: sStyle.background, borderColor: sStyle.borderColor,
+                      }}>
+                        {statusLabel(dispute.status)}
+                      </span>
+                      {' '}
+                      {blockchainRecords.some(r => r.disputeId === dispute.id && r.onChain) && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
+                      )}
+                    </td>
+                    {userRole === 'supplier' && (
+                      <td style={{ padding: 10, borderBottom: idx === objections.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
+                        {dispute.status === 'rejected' && !dispute.escalatedToDAO && (
+                          <button
+                            onClick={() => handleEscalateToDAO(dispute)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              padding: '6px 12px', borderRadius: 8, border: '1px solid #c99a3c',
+                              background: '#fef9e7', color: '#78350f', fontSize: 12, fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <ArrowUpRight style={{ width: 13, height: 13 }} />
+                            {t('disputes.escalateToDAO')}
+                          </button>
+                        )}
+                        {dispute.escalatedToDAO && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#8a5a12' }}>
+                            {t('disputes.escalatedToDAO')}
+                          </span>
+                        )}
+                      </td>
                     )}
-                  </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

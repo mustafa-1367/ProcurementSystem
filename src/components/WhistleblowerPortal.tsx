@@ -271,7 +271,7 @@ export function WhistleblowerPortal({
       relatedId: report.relatedId || '',
       level: 'central_npa',
       evidence: report.evidence || '',
-      type: 'oversight_complaint',
+      type: 'escalated_whistleblower',
       status: 'voting',
       sourceReportId: report.id,
       committeeMembers: [],
