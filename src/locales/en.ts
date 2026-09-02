@@ -464,6 +464,8 @@ export const en = {
     approvalRate: 'Approval Rate',
     timeRemaining: 'Time Remaining',
     days: 'days',
+    skipToDeadline: 'Skip to Deadline (Demo)',
+    skipToDeadlineHint: 'Fast-forward the voting deadline to test expiration behavior',
     approve: 'Approve',
     reject: 'Reject',
     votes: 'votes',

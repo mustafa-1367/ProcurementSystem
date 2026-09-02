@@ -456,6 +456,8 @@ export const ps = {
     approvalRate: 'د تایید نرخ',
     timeRemaining: 'پاتې وخت',
     days: 'ورځې',
+    skipToDeadline: 'مهلت ته تیر شئ (نمایشي)',
+    skipToDeadlineHint: 'د رایې ورکولو مهلت مخکې کړئ ترڅو د ختمیدو چلند وازمایئ',
     approve: 'تایید',
     reject: 'رد',
     votes: 'رأیونه',

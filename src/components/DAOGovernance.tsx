@@ -340,7 +340,26 @@ export function DAOGovernance({
                         </div>
                         <div style={{ background: '#f9fafb', borderRadius: 8, padding: '8px 12px' }}>
                           <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: '#6b7280' }}>{t('dao.timeRemaining')}</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: daysRemaining <= 1 ? '#dc2626' : '#0b0b0b' }}>{daysRemaining} {t('dao.days')}</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: daysRemaining <= 1 ? '#dc2626' : '#0b0b0b' }}>{daysRemaining} {t('dao.days')}</p>
+                            <button
+                              onClick={() => {
+                                const updated = disputes.map(d =>
+                                  d.id === dispute.id ? { ...d, votingDeadline: new Date(Date.now() - 1000).toISOString() } : d
+                                );
+                                setDisputes(updated);
+                              }}
+                              style={{
+                                fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
+                                border: '1px solid #e5e7eb', background: '#fff', color: '#6b7280',
+                                cursor: 'pointer', whiteSpace: 'nowrap',
+                              }}
+                              title={t('dao.skipToDeadlineHint')}
+                            >
+                              <Clock style={{ width: 10, height: 10, display: 'inline', verticalAlign: '-1px', marginRight: 3 }} />
+                              {t('dao.skipToDeadline')}
+                            </button>
+                          </div>
                         </div>
                       </div>
 

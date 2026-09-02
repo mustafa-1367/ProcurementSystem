@@ -456,6 +456,8 @@ export const fa = {
     approvalRate: 'نرخ تأیید',
     timeRemaining: 'زمان باقی‌مانده',
     days: 'روز',
+    skipToDeadline: 'رد شدن به مهلت (نمایشی)',
+    skipToDeadlineHint: 'مهلت رأی‌گیری را برای آزمایش رفتار انقضا جلو ببرید',
     approve: 'تأیید',
     reject: 'رد',
     votes: 'رأی',
