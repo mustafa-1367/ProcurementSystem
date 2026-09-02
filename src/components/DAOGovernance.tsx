@@ -26,8 +26,13 @@ export function DAOGovernance({
   reports,
 }: DAOGovernanceProps) {
   const [userVotes, setUserVotes] = useState<{ [key: string]: 'approve' | 'reject' }>({});
-  const [showHowItWorks, setShowHowItWorks] = useState(true);
+  const [showHowItWorks, setShowHowItWorks] = useState(() => {
+    try { return localStorage.getItem('dao-how-it-works-dismissed') !== 'true'; } catch { return true; }
+  });
   const [daoFilter, setDaoFilter] = useState<'active' | 'resolved' | 'expired'>('active');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'objection' | 'whistleblower'>('all');
+  const [expandedVoteHistory, setExpandedVoteHistory] = useState<Set<string>>(new Set());
+  const [pendingVote, setPendingVote] = useState<{ disputeId: string; vote: 'approve' | 'reject' } | null>(null);
   const { t } = useTranslation();
   const { connected, isCorrectNetwork, connect, account } = useWeb3();
   const QUORUM_THRESHOLD = 5;
@@ -105,9 +110,16 @@ export function DAOGovernance({
   };
 
   // Categorise disputes
-  const activeDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && !isDeadlinePassed(d));
-  const expiredDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && isDeadlinePassed(d));
-  const resolvedDisputes = disputes.filter((d) => d.status === 'resolved' && d.resolution && typeof d.resolution === 'object');
+  const filterBySource = (d: any) => {
+    if (sourceFilter === 'all') return true;
+    if (sourceFilter === 'objection') return d.type === 'escalated_objection';
+    if (sourceFilter === 'whistleblower') return d.type === 'escalated_whistleblower';
+    return true;
+  };
+
+  const activeDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && !isDeadlinePassed(d) && filterBySource(d));
+  const expiredDisputes = disputes.filter((d) => d.status === 'voting' && d.votes && isDeadlinePassed(d) && filterBySource(d));
+  const resolvedDisputes = disputes.filter((d) => d.status === 'resolved' && d.resolution && typeof d.resolution === 'object' && filterBySource(d));
 
   // Unique voters from blockchain records
   const uniqueVoters = new Set(
@@ -138,34 +150,34 @@ export function DAOGovernance({
     : 0;
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* Header */}
       <div>
-        <h2 className="text-gray-900">{t('dao.title')}</h2>
-        <p className="text-gray-600 mt-1">{t('dao.subtitle')}</p>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0b0b0b' }}>{t('dao.title')}</h2>
+        <p style={{ margin: '4px 0 0', fontSize: 14, color: '#6e6c66' }}>{t('dao.subtitle')}</p>
       </div>
 
       {/* DAO Mode Indicator */}
       {connected && isCorrectNetwork ? (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg p-4">
-          <Shield className="w-5 h-5 text-green-600 flex-shrink-0" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 12, padding: 16 }}>
+          <Shield style={{ width: 20, height: 20, color: '#059669', flexShrink: 0 }} />
           <div>
-            <p className="text-green-900 font-medium text-sm">{t('dao.onChainNotice')}</p>
-            <p className="text-green-700 text-xs mt-0.5">{t('dao.onChainDesc')}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#065f46' }}>{t('dao.onChainNotice')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#047857' }}>{t('dao.onChainDesc')}</p>
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <Shield className="w-5 h-5 text-amber-600 flex-shrink-0" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 16 }}>
+          <Shield style={{ width: 20, height: 20, color: '#d97706', flexShrink: 0 }} />
           <div>
-            <p className="text-amber-900 font-medium text-sm">{t('dao.simulationNotice')}</p>
-            <p className="text-amber-700 text-xs mt-0.5">{t('dao.simulationDesc')}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#92400e' }}>{t('dao.simulationNotice')}</p>
+            <p style={{ margin: '2px 0 0', fontSize: 12, color: '#b45309' }}>{t('dao.simulationDesc')}</p>
           </div>
         </div>
       )}
 
       {/* DAO Statistics — fixed #2 (members) and #6 (participation label) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         <div style={{ background: '#eff6ff', borderRadius: 12, border: '1px solid #bfdbfe', padding: '20px', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Vote style={{ width: 20, height: 20, color: '#2563eb' }} />
@@ -218,7 +230,7 @@ export function DAOGovernance({
           <strong>{t('dao.howItWorks')}</strong> {t('dao.howItWorksDesc')}
         </div>
         <button
-          onClick={() => setShowHowItWorks(false)}
+          onClick={() => { setShowHowItWorks(false); try { localStorage.setItem('dao-how-it-works-dismissed', 'true'); } catch {} }}
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 2, flexShrink: 0 }}
           aria-label="Dismiss"
         >
@@ -249,19 +261,40 @@ export function DAOGovernance({
           </button>
         ))}
       </div>
+      <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+        {([
+          { key: 'all' as const, label: t('dao.allSources') },
+          { key: 'objection' as const, label: t('dao.fromObjection') },
+          { key: 'whistleblower' as const, label: t('dao.fromWhistleblower') },
+        ]).map(sf => (
+          <button
+            key={sf.key}
+            onClick={() => setSourceFilter(sf.key)}
+            style={{
+              padding: '4px 12px', borderRadius: 999, border: '1px solid',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all .15s',
+              ...(sourceFilter === sf.key
+                ? { background: '#e0e7ff', color: '#3730a3', borderColor: '#c7d2fe' }
+                : { background: '#fff', color: '#9ca3af', borderColor: '#e5e7eb' }),
+            }}
+          >
+            {sf.label}
+          </button>
+        ))}
+      </div>
 
       {/* Active Disputes for Voting */}
       {daoFilter === 'active' && (
-      <div className="space-y-4">
-        <h3 className="text-gray-900">{t('dao.activeVoting')}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: '#0b0b0b' }}>{t('dao.activeVoting')}</h3>
         {activeDisputes.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
-            <Vote className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">{t('dao.noActiveDisputes')}</p>
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 48, textAlign: 'center' }}>
+            <Vote style={{ width: 64, height: 64, color: '#d1d5db', margin: '0 auto 16px' }} />
+            <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>{t('dao.noActiveDisputes')}</p>
             <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 4 }}>{t('dao.noActiveDisputesHint')}</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {activeDisputes.map((dispute) => {
               const daysRemaining = Math.ceil(
                 (new Date(dispute.votingDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
@@ -275,11 +308,11 @@ export function DAOGovernance({
               const srcStyle = getSourceStyle(dispute);
 
               return (
-                <div key={dispute.id} className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2" style={{ flexWrap: 'wrap' }}>
-                        <h4 className="text-gray-900">{dispute.title}</h4>
+                <div key={dispute.id} style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: '24px' }}>
+                  <div style={{ marginBottom: 16 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 8px', color: '#0b0b0b', lineHeight: 1.4 }}>{dispute.title}</h4>
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', gap: 4,
                           fontSize: '11.5px', fontWeight: 700, padding: '3px 10px',
@@ -292,7 +325,7 @@ export function DAOGovernance({
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
                         )}
                       </div>
-                      <p className="text-gray-600 mb-2" style={{ fontSize: 13.5 }}>{dispute.description}</p>
+                      <p style={{ fontSize: 13.5, margin: '0 0 10px', color: '#6b7280' }}>{dispute.description}</p>
 
                       {/* Source link */}
                       {(dispute.sourceDisputeId || dispute.sourceReportId) && (
@@ -304,18 +337,18 @@ export function DAOGovernance({
 
                       {/* Evidence */}
                       {(dispute.evidence || (dispute.attachments && dispute.attachments.length > 0)) && (
-                        <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                          <p className="text-gray-700 mb-2">{t('dao.evidence')}</p>
-                          {dispute.evidence && <p className="text-gray-600 mb-2">{dispute.evidence}</p>}
+                        <div style={{ background: '#f9fafb', padding: 16, borderRadius: 10, marginBottom: 16 }}>
+                          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: '#374151' }}>{t('dao.evidence')}</p>
+                          {dispute.evidence && <p style={{ margin: '0 0 8px', fontSize: 13, color: '#6b7280' }}>{dispute.evidence}</p>}
                           {dispute.attachments && dispute.attachments.length > 0 && (
-                            <div className="flex flex-wrap gap-3 mt-2">
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
                               {dispute.attachments.map((file: any, i: number) => (
                                 <a key={i} href={file.url} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-100 transition-colors">
-                                  {file.type.startsWith('image/') ? <Image className="w-4 h-4 text-green-600" /> :
-                                   file.type.startsWith('video/') ? <Video className="w-4 h-4 text-purple-600" /> :
-                                   <FileText className="w-4 h-4 text-red-600" />}
-                                  <span className="text-sm text-blue-600 underline">{file.name}</span>
+                                  style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px', textDecoration: 'none' }}>
+                                  {file.type.startsWith('image/') ? <Image style={{ width: 16, height: 16, color: '#059669' }} /> :
+                                   file.type.startsWith('video/') ? <Video style={{ width: 16, height: 16, color: '#7c3aed' }} /> :
+                                   <FileText style={{ width: 16, height: 16, color: '#dc2626' }} />}
+                                  <span style={{ fontSize: 13, color: '#2563eb', textDecoration: 'underline' }}>{file.name}</span>
                                 </a>
                               ))}
                             </div>
@@ -364,66 +397,112 @@ export function DAOGovernance({
                       </div>
 
                       {dispute.votes.totalVoters < QUORUM_THRESHOLD && (
-                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4 text-sm text-amber-800">
-                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 16px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
+                          <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
                           {t('dao.quorumNotMet')}
                         </div>
                       )}
 
                       {/* Voting Progress */}
-                      <div className="space-y-2 mb-4">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-green-600">{t('dao.approve')}</span>
-                            <span className="text-gray-700">{dispute.votes.approve} {t('dao.votes')}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#059669' }}>{t('dao.approve')}</span>
+                            <span style={{ fontSize: 13, color: '#374151' }}>{dispute.votes.approve} {t('dao.votes')}</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-green-600 h-2 rounded-full transition-all" style={{ width: `${approvalRate}%` }}></div>
+                          <div style={{ width: '100%', background: '#e5e7eb', borderRadius: 999, height: 8 }}>
+                            <div style={{ background: '#059669', height: 8, borderRadius: 999, transition: 'width 0.3s', width: `${approvalRate}%` }} />
                           </div>
                         </div>
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-red-600">{t('dao.reject')}</span>
-                            <span className="text-gray-700">{dispute.votes.reject} {t('dao.votes')}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#dc2626' }}>{t('dao.reject')}</span>
+                            <span style={{ fontSize: 13, color: '#374151' }}>{dispute.votes.reject} {t('dao.votes')}</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div className="bg-red-600 h-2 rounded-full transition-all" style={{ width: `${dispute.votes.totalVoters > 0 ? ((dispute.votes.reject / dispute.votes.totalVoters) * 100).toFixed(1) : 0}%` }}></div>
+                          <div style={{ width: '100%', background: '#e5e7eb', borderRadius: 999, height: 8 }}>
+                            <div style={{ background: '#dc2626', height: 8, borderRadius: 999, transition: 'width 0.3s', width: `${dispute.votes.totalVoters > 0 ? ((dispute.votes.reject / dispute.votes.totalVoters) * 100).toFixed(1) : 0}%` }} />
                           </div>
                         </div>
                       </div>
 
                       {/* Vote Buttons — #1: role-gated */}
                       {!canVote ? (
-                        <div className="flex items-center gap-2 text-gray-500 bg-gray-50 border border-gray-200 px-4 py-2 rounded-lg text-sm">
-                          <Shield className="w-4 h-4" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#6b7280', background: '#f9fafb', border: '1px solid #e5e7eb', padding: '8px 16px', borderRadius: 10, fontSize: 13 }}>
+                          <Shield style={{ width: 16, height: 16 }} />
                           {t('dao.onlyAuditorOversight')}
                         </div>
                       ) : !connected || !isCorrectNetwork ? (
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2 text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg text-sm">
-                            <Shield className="w-4 h-4" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '8px 16px', borderRadius: 10, fontSize: 13 }}>
+                            <Shield style={{ width: 16, height: 16 }} />
                             {t('dao.walletRequiredToVote')}
                           </div>
                           {!connected && (
-                            <button onClick={connect} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                            <button onClick={connect} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#2563eb', color: '#fff', padding: '8px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
                               {t('dao.connectToVote')}
                             </button>
                           )}
                         </div>
                       ) : !hasVoted ? (
-                        <div className="flex gap-3">
-                          <button onClick={() => castVote(dispute.id, 'approve')} className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                            <CheckCircle className="w-5 h-5" />
+                        <>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <button onClick={() => setPendingVote({ disputeId: dispute.id, vote: 'approve' })} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10,
+                            border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                            background: 'linear-gradient(135deg, #059669, #047857)', color: '#fff',
+                            boxShadow: '0 2px 6px rgba(5,150,105,0.3)',
+                          }}>
+                            <CheckCircle style={{ width: 18, height: 18 }} />
                             {t('dao.voteApprove')}
                           </button>
-                          <button onClick={() => castVote(dispute.id, 'reject')} className="flex items-center gap-2 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">
-                            <XCircle className="w-5 h-5" />
+                          <button onClick={() => setPendingVote({ disputeId: dispute.id, vote: 'reject' })} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 10,
+                            border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                            background: 'linear-gradient(135deg, #dc2626, #b91c1c)', color: '#fff',
+                            boxShadow: '0 2px 6px rgba(220,38,38,0.3)',
+                          }}>
+                            <XCircle style={{ width: 18, height: 18 }} />
                             {t('dao.voteReject')}
                           </button>
                         </div>
+                        {pendingVote?.disputeId === dispute.id && (
+                          <div style={{
+                            marginTop: 12, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+                            padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <AlertCircle style={{ width: 18, height: 18, color: '#d97706', flexShrink: 0 }} />
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+                                {pendingVote.vote === 'approve' ? t('dao.confirmVoteApprove') : t('dao.confirmVoteReject')}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button
+                                onClick={() => setPendingVote(null)}
+                                style={{
+                                  padding: '6px 14px', borderRadius: 8, border: '1px solid #e5e7eb',
+                                  background: '#fff', color: '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                                }}
+                              >
+                                {t('dao.cancel')}
+                              </button>
+                              <button
+                                onClick={() => { castVote(pendingVote.disputeId, pendingVote.vote); setPendingVote(null); }}
+                                style={{
+                                  padding: '6px 14px', borderRadius: 8, border: 'none',
+                                  background: pendingVote.vote === 'approve' ? '#059669' : '#dc2626',
+                                  color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                }}
+                              >
+                                {t('dao.confirmVote')}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        </>
                       ) : (
-                        <div className="flex items-center gap-2 text-blue-600">
-                          <CheckCircle className="w-5 h-5" />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#2563eb', fontSize: 14, fontWeight: 600 }}>
+                          <CheckCircle style={{ width: 18, height: 18 }} />
                           <span>{t('dao.youVoted')} {hasVoted}</span>
                         </div>
                       )}
@@ -433,7 +512,7 @@ export function DAOGovernance({
                         <div style={{ marginTop: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px' }}>
                           <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#52514e' }}>{t('dao.voteHistory')} ({voteHistory.length})</p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {voteHistory.slice(-5).map((v: any, i: number) => (
+                            {(expandedVoteHistory.has(dispute.id) ? voteHistory : voteHistory.slice(-5)).map((v: any, i: number) => (
                               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   {v.vote === 'approve'
@@ -447,6 +526,18 @@ export function DAOGovernance({
                                 <span style={{ color: '#9ca3af' }}>{new Date(v.timestamp).toLocaleString()}</span>
                               </div>
                             ))}
+                            {voteHistory.length > 5 && (
+                              <button
+                                onClick={() => {
+                                  const next = new Set(expandedVoteHistory);
+                                  if (next.has(dispute.id)) next.delete(dispute.id); else next.add(dispute.id);
+                                  setExpandedVoteHistory(next);
+                                }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#2563eb', padding: '4px 0 0', textAlign: 'left' }}
+                              >
+                                {expandedVoteHistory.has(dispute.id) ? t('dao.showLess') : `${t('dao.showMore')} (${voteHistory.length})`}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -462,15 +553,15 @@ export function DAOGovernance({
 
       {/* Resolved Disputes */}
       {daoFilter === 'resolved' && (
-        <div className="space-y-4">
-          <h3 className="text-gray-900">{t('dao.resolvedDisputes')}</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: '#0b0b0b' }}>{t('dao.resolvedDisputes')}</h3>
           {resolvedDisputes.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
-              <CheckCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">{t('dao.noResolvedYet')}</p>
+            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 48, textAlign: 'center' }}>
+              <CheckCircle style={{ width: 64, height: 64, color: '#d1d5db', margin: '0 auto 16px' }} />
+              <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>{t('dao.noResolvedYet')}</p>
             </div>
           ) : (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {resolvedDisputes.map((dispute) => {
               const srcStyle = getSourceStyle(dispute);
               const voteHistory = getVoteHistory(dispute.id);
@@ -531,12 +622,19 @@ export function DAOGovernance({
                         </div>
                       </div>
 
+                      {dispute.resolution?.summary && (
+                        <div style={{ marginTop: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px' }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#065f46', marginBottom: 4 }}>{t('dao.resolutionSummary')}</p>
+                          <p style={{ margin: 0, fontSize: 13, color: '#166534', lineHeight: 1.5 }}>{dispute.resolution.summary}</p>
+                        </div>
+                      )}
+
                       {/* Vote History on resolved cards too */}
                       {voteHistory.length > 0 && (
                         <div style={{ marginTop: 10, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px' }}>
                           <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#52514e' }}>{t('dao.voteHistory')} ({voteHistory.length})</p>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {voteHistory.map((v: any, i: number) => (
+                            {(expandedVoteHistory.has(dispute.id) ? voteHistory : voteHistory.slice(-5)).map((v: any, i: number) => (
                               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   {v.vote === 'approve'
@@ -550,6 +648,18 @@ export function DAOGovernance({
                                 <span style={{ color: '#9ca3af' }}>{new Date(v.timestamp).toLocaleString()}</span>
                               </div>
                             ))}
+                            {voteHistory.length > 5 && (
+                              <button
+                                onClick={() => {
+                                  const next = new Set(expandedVoteHistory);
+                                  if (next.has(dispute.id)) next.delete(dispute.id); else next.add(dispute.id);
+                                  setExpandedVoteHistory(next);
+                                }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#2563eb', padding: '4px 0 0', textAlign: 'left' }}
+                              >
+                                {expandedVoteHistory.has(dispute.id) ? t('dao.showLess') : `${t('dao.showMore')} (${voteHistory.length})`}
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}
@@ -565,15 +675,15 @@ export function DAOGovernance({
 
       {/* Expired Disputes — #5 */}
       {daoFilter === 'expired' && (
-        <div className="space-y-4">
-          <h3 className="text-gray-900">{t('dao.expiredDisputes')}</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 700, color: '#0b0b0b' }}>{t('dao.expiredDisputes')}</h3>
           {expiredDisputes.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-md p-12 text-center border border-gray-200">
-              <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">{t('dao.noExpiredYet')}</p>
+            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid rgba(11,11,11,0.08)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 48, textAlign: 'center' }}>
+              <Clock style={{ width: 64, height: 64, color: '#d1d5db', margin: '0 auto 16px' }} />
+              <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>{t('dao.noExpiredYet')}</p>
             </div>
           ) : (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {expiredDisputes.map((dispute) => {
               const srcStyle = getSourceStyle(dispute);
               return (
@@ -610,6 +720,27 @@ export function DAOGovernance({
                         <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: '#dc2626' }}>{new Date(dispute.votingDeadline).toLocaleDateString()}</p>
                       </div>
                     </div>
+                    {canVote && (
+                      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => {
+                            const updated = disputes.map(d =>
+                              d.id === dispute.id ? { ...d, votingDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), votes: { approve: 0, reject: 0, totalVoters: 0 } } : d
+                            );
+                            setDisputes(updated);
+                          }}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
+                            padding: '8px 16px', borderRadius: 8, border: '1px solid #c7d2fe',
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)', color: '#fff',
+                            cursor: 'pointer', boxShadow: '0 1px 3px rgba(79,70,229,0.3)',
+                          }}
+                        >
+                          <Vote style={{ width: 14, height: 14 }} />
+                          {t('dao.reopenVoting')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -620,14 +751,12 @@ export function DAOGovernance({
       )}
 
       {/* DAO Info */}
-      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
-        <div className="flex items-start gap-4">
-          <Users className="w-6 h-6 text-purple-600 flex-shrink-0 mt-1" />
+      <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: 12, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+          <Users style={{ width: 24, height: 24, color: '#7c3aed', flexShrink: 0, marginTop: 2 }} />
           <div>
-            <h4 className="text-purple-900 mb-2">{t('dao.daoTitle')}</h4>
-            <p className="text-purple-800">
-              {t('dao.daoDescription')}
-            </p>
+            <h4 style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 700, color: '#581c87' }}>{t('dao.daoTitle')}</h4>
+            <p style={{ margin: 0, fontSize: 14, color: '#6b21a8', lineHeight: 1.6 }}>{t('dao.daoDescription')}</p>
           </div>
         </div>
       </div>
