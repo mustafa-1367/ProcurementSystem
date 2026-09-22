@@ -12,15 +12,25 @@ interface PublicAuditDashboardProps {
   userRole: string;
   disputes?: any[];
   reports?: any[];
+  onAwardTokens?: (amount: number, type: string, label: string, meta?: Record<string, unknown>) => void;
 }
 
-export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole, disputes = [], reports = [] }: PublicAuditDashboardProps) {
+const CITIZEN_VERIFY_REWARD = 10;
+
+export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole, disputes = [], reports = [], onAwardTokens }: PublicAuditDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState('all');
   const [reviewedRecords, setReviewedRecords] = useState<Set<string>>(new Set());
+  const [citizenVerifiedRecords, setCitizenVerifiedRecords] = useState<Set<string>>(new Set());
   const { t } = useTranslation();
+
+  const handleCitizenVerify = (recordId: string) => {
+    if (citizenVerifiedRecords.has(recordId)) return;
+    setCitizenVerifiedRecords((prev) => new Set(prev).add(recordId));
+    onAwardTokens?.(CITIZEN_VERIFY_REWARD, 'citizen_verification_reward', t('wallet.verifyRewardType'), { recordId });
+  };
   const parseBudget = (v: any) => Number(String(v).replace(/,/g, ''));
 
   const handleDownloadReport = () => {
@@ -775,6 +785,32 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                     >
                                       <CheckCircle style={{ width: 12, height: 12, display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
                                       {t('audit.markReviewed')}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {userRole === 'citizen' && (
+                                <div style={{ marginTop: 8 }}>
+                                  {citizenVerifiedRecords.has(record.id) ? (
+                                    <span style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      fontSize: 11, fontWeight: 700, padding: '4px 12px',
+                                      borderRadius: 6, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a',
+                                    }}>
+                                      <Coins style={{ width: 12, height: 12 }} />
+                                      {t('audit.recordVerified').replace('{{amount}}', String(CITIZEN_VERIFY_REWARD))}
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleCitizenVerify(record.id)}
+                                      style={{
+                                        fontSize: 11, fontWeight: 600, padding: '4px 12px',
+                                        borderRadius: 6, border: '1px solid #d97706', background: '#fffbeb',
+                                        color: '#92400e', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+                                      }}
+                                    >
+                                      <Coins style={{ width: 12, height: 12 }} />
+                                      {t('audit.verifyRecord').replace('{{amount}}', String(CITIZEN_VERIFY_REWARD))}
                                     </button>
                                   )}
                                 </div>

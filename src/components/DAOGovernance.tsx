@@ -13,7 +13,10 @@ interface DAOGovernanceProps {
   blockchainRecords: any[];
   userRole: string;
   reports: any[];
+  onAwardTokens?: (amount: number, type: string, label: string, meta?: Record<string, unknown>) => void;
 }
+
+const DAO_VOTE_REWARD = 15;
 
 export function DAOGovernance({
   disputes,
@@ -24,6 +27,7 @@ export function DAOGovernance({
   blockchainRecords,
   userRole,
   reports,
+  onAwardTokens,
 }: DAOGovernanceProps) {
   const [userVotes, setUserVotes] = useState<{ [key: string]: 'approve' | 'reject' }>({});
   const [showHowItWorks, setShowHowItWorks] = useState(() => {
@@ -75,6 +79,7 @@ export function DAOGovernance({
     }]);
 
     setUserVotes({ ...userVotes, [voteKey]: vote });
+    onAwardTokens?.(DAO_VOTE_REWARD, 'dao_vote_reward', t('wallet.voteRewardType'), { disputeId });
 
     const newVotes = {
       approve: dispute.votes.approve + (vote === 'approve' ? 1 : 0),

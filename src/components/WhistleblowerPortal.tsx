@@ -16,6 +16,7 @@ interface WhistleblowerPortalProps {
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
   userRole: string;
+  onAwardTokens?: (amount: number, type: string, label: string, meta?: Record<string, unknown>) => void;
 }
 
 export function WhistleblowerPortal({
@@ -28,6 +29,7 @@ export function WhistleblowerPortal({
   setBlockchainRecords,
   blockchainRecords,
   userRole,
+  onAwardTokens,
 }: WhistleblowerPortalProps) {
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportForm, setReportForm] = useState({
@@ -318,8 +320,11 @@ export function WhistleblowerPortal({
     const updatedReports = reports.map((r) => {
       if (r.id !== reportId) return r;
       const updated = { ...r, investigationStatus: newStatus };
-      if (newStatus === 'resolved' && r.rewards) {
+      if (newStatus === 'resolved' && r.rewards && r.rewards.status !== 'awarded') {
         updated.rewards = { ...r.rewards, status: 'awarded' };
+        if (r.rewards.amount > 0) {
+          onAwardTokens?.(r.rewards.amount, 'whistleblower_reward', t('wallet.rewardType'), { reportId: r.id });
+        }
       }
       return updated;
     });

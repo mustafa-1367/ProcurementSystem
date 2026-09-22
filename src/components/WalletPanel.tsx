@@ -65,7 +65,7 @@ export function WalletPanel({
   };
 
   return (
-    <div className="fixed z-50 flex items-center justify-center p-4" style={{ top: 110, left: 0, right: 0, bottom: 0 }}>
+    <div className="fixed flex items-center justify-center p-4" style={{ top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999 }}>
       <div className="absolute inset-0 bg-black opacity-40" onClick={onClose} aria-hidden="true"></div>
 
       <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full z-10 overflow-hidden">

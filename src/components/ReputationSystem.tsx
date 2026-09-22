@@ -6,6 +6,8 @@ interface ReputationSystemProps {
   reputationScores: any[];
   bids: any[];
   contracts: any[];
+  disputes?: any[];
+  reports?: any[];
 }
 
 const GOLD = '#c99a3c';
@@ -27,17 +29,14 @@ const badgeStyle: React.CSSProperties = {
   gap: 4,
 };
 
-export function ReputationSystem({ reputationScores, bids, contracts }: ReputationSystemProps) {
+export function ReputationSystem({ reputationScores, bids, contracts, disputes = [], reports = [] }: ReputationSystemProps) {
   const [expandedVendor, setExpandedVendor] = useState<string | null>(null);
   const { t } = useTranslation();
 
-  // Deterministic hash from vendor name — replaces Math.random() so scores stay stable across re-renders
-  const stableHash = (str: string, seed: number = 0): number => {
-    let h = seed;
-    for (let i = 0; i < str.length; i++) {
-      h = ((h << 5) - h + str.charCodeAt(i)) | 0;
-    }
-    return ((h >>> 0) % 1000) / 1000; // returns 0–1
+  // Extract the number of months from a "24 months" style timeline string.
+  const parseTimelineMonths = (timeline: string): number => {
+    const match = /(\d+)/.exec(timeline || '');
+    return match ? Number(match[1]) : 12;
   };
 
   const calculateVendorScores = () => {
@@ -56,17 +55,24 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
           onTimeDelivery: 0,
           qualityScore: 0,
           complianceScore: 0,
+          tenderIds: new Set<string>(),
+          contractIds: new Set<string>(),
         };
       }
-      vendors[bid.vendorName].totalBids++;
+      const vendor = vendors[bid.vendorName];
+      vendor.totalBids++;
+      if (bid.tenderId) vendor.tenderIds.add(bid.tenderId);
     });
 
     contracts.forEach((contract) => {
       if (vendors[contract.vendorName]) {
-        vendors[contract.vendorName].wonContracts++;
-        vendors[contract.vendorName].totalValue += Number(contract.amount);
+        const vendor = vendors[contract.vendorName];
+        vendor.wonContracts++;
+        vendor.totalValue += Number(contract.amount);
+        if (contract.tenderId) vendor.tenderIds.add(contract.tenderId);
+        vendor.contractIds.add(contract.id);
         if (contract.status === 'completed') {
-          vendors[contract.vendorName].completedContracts++;
+          vendor.completedContracts++;
         }
       }
     });
@@ -74,12 +80,51 @@ export function ReputationSystem({ reputationScores, bids, contracts }: Reputati
     Object.keys(vendors).forEach((vendorName) => {
       const vendor = vendors[vendorName];
       vendor.avgBidAccuracy = Math.min(95, 70 + (vendor.wonContracts / vendor.totalBids) * 25);
-      vendor.onTimeDelivery = vendor.completedContracts > 0
-        ? Math.min(100, 75 + stableHash(vendorName, 1) * 25) : 0;
-      vendor.qualityScore = vendor.completedContracts > 0
-        ? Math.min(95, 70 + stableHash(vendorName, 2) * 25) : 0;
-      vendor.complianceScore = vendor.totalBids > 0
-        ? Math.min(100, 80 + stableHash(vendorName, 3) * 20) : 0;
+
+      // On-time delivery: for each won contract, compare actual progress against
+      // the progress expected from elapsed time since award (awardedAt + timeline).
+      // A completed contract always scores 100; an active one that's lagging behind
+      // its expected schedule is penalised proportionally to how far behind it is.
+      const vendorContracts = contracts.filter((c) => c.vendorName === vendorName);
+      if (vendorContracts.length > 0) {
+        const perContractScores = vendorContracts.map((c) => {
+          if (c.status === 'completed') return 100;
+          const awardedAt = c.awardedAt ? new Date(c.awardedAt).getTime() : null;
+          const totalDays = parseTimelineMonths(c.timeline) * 30;
+          if (!awardedAt || !totalDays) return 80;
+          const elapsedDays = (Date.now() - awardedAt) / (1000 * 60 * 60 * 24);
+          const expectedProgress = Math.min(100, (elapsedDays / totalDays) * 100);
+          const actualProgress = c.progress ?? 0;
+          const behindBy = Math.max(0, expectedProgress - actualProgress);
+          return Math.max(40, 100 - behindBy * 2);
+        });
+        vendor.onTimeDelivery = perContractScores.reduce((sum: number, s: number) => sum + s, 0) / perContractScores.length;
+      } else {
+        vendor.onTimeDelivery = 0;
+      }
+
+      // Quality score: start clean and deduct for whistleblower reports tied to
+      // this vendor's tenders, weighted by severity and investigation progress.
+      const vendorReports = reports.filter((r) => vendor.tenderIds.has(r.relatedId));
+      let qualityScore = vendor.totalBids > 0 ? 100 : 0;
+      vendorReports.forEach((r) => {
+        const severityWeight = r.severity === 'high' ? 20 : r.severity === 'medium' ? 12 : 6;
+        const statusWeight = r.investigationStatus === 'resolved' ? 1 : r.investigationStatus === 'investigating' ? 0.6 : 0.3;
+        qualityScore -= severityWeight * statusWeight;
+      });
+      vendor.qualityScore = vendor.totalBids > 0 ? Math.max(30, Math.min(100, qualityScore)) : 0;
+
+      // Compliance score: start clean and deduct for disputes/objections tied to
+      // this vendor's tenders or contracts, weighted by how they were resolved.
+      const vendorDisputes = disputes.filter((d) => vendor.tenderIds.has(d.relatedId) || vendor.contractIds.has(d.relatedId));
+      let complianceScore = vendor.totalBids > 0 ? 100 : 0;
+      vendorDisputes.forEach((d) => {
+        if (d.resolution?.decision === 'approved') complianceScore -= 25; // complaint upheld against vendor
+        else if (!d.resolution) complianceScore -= 8; // still unresolved — pending risk
+        // resolution.decision === 'rejected' (dismissed) carries no penalty
+      });
+      vendor.complianceScore = vendor.totalBids > 0 ? Math.max(30, Math.min(100, complianceScore)) : 0;
+
       vendor.reputationScore = (
         vendor.avgBidAccuracy * 0.25 +
         vendor.onTimeDelivery * 0.30 +

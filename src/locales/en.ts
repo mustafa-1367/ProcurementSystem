@@ -425,6 +425,8 @@ export const en = {
     reviewed: 'Reviewed',
     markReviewed: 'Mark as Reviewed',
     undoReview: 'Undo Review',
+    verifyRecord: 'Verify & Earn {{amount}} TOK',
+    recordVerified: 'Verified — +{{amount}} TOK earned',
   },
 
   // DAOGovernance
@@ -818,6 +820,8 @@ export const en = {
     noTransactions: 'No transactions yet',
     mintType: 'Mint',
     rewardType: 'Whistleblower Reward',
+    verifyRewardType: 'Citizen Verification Reward',
+    voteRewardType: 'DAO Vote Participation Reward',
     transferTo: 'Transfer to',
     simulated: 'Simulated',
     simulationDisclaimer: 'This is a simulated token wallet for prototype demonstration. Tokens have no real value. Minting is limited to 3 times per session.',
@@ -918,7 +922,7 @@ export const en = {
     faq6A: 'The Reputation System scores suppliers based on four weighted metrics: Bid Accuracy (25%), On-Time Delivery (30%), Quality Score (30%), and Compliance (15%). Scores are computed from blockchain-verified contract data and determine a supplier\'s tier (Bronze, Silver, Gold, Platinum).',
 
     faq7Q: 'What tokens (TOK) are used for?',
-    faq7A: 'TOK is the platform\'s internal token used for governance participation, staking on dispute votes, and milestone-based contract payments. You can view your balance and transaction history in the Wallet panel accessible from the header.',
+    faq7A: 'TOK is the platform\'s internal token used for governance participation, staking on dispute votes, and milestone-based contract payments. You can view your balance and transaction history in the Wallet panel accessible from the navigation bar.',
 
     gl0Term: 'Blockchain',
     gl0Def: 'A distributed, append-only digital ledger that stores records in linked blocks. Once data is written it cannot be changed, providing a tamper-proof audit trail.',

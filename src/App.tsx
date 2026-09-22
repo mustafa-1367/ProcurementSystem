@@ -14,8 +14,10 @@ import { SubmitBid } from './components/SubmitBid';
 import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock, Database } from 'lucide-react';
+import { WalletPanel } from './components/WalletPanel';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock, Database, Coins } from 'lucide-react';
 import { generateDemoData } from './data/demoData';
+import { blockchain } from './utils/blockchain';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
@@ -79,6 +81,9 @@ function AppContent() {
   const [reports, setReports] = useState<any[]>([]);
   const [reputationScores, setReputationScores] = useState<any[]>([]);
   const [registeredSuppliers, setRegisteredSuppliers] = useState<any[]>([]);
+  const [balance, setBalance] = useState<number>(500);
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+  const [showWallet, setShowWallet] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   // Load shared state from Firebase on mount
@@ -93,6 +98,8 @@ function AppContent() {
         if (data.reports) setReports(data.reports);
         if (data.reputationScores) setReputationScores(data.reputationScores);
         if (data.registeredSuppliers) setRegisteredSuppliers(data.registeredSuppliers);
+        if (typeof data.balance === 'number') setBalance(data.balance);
+        if (data.walletTransactions) setWalletTransactions(data.walletTransactions);
       }
       setLoaded(true);
     });
@@ -101,8 +108,22 @@ function AppContent() {
   // Save to Firebase on any change (only after initial load)
   useEffect(() => {
     if (!loaded) return;
-    saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers });
-  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, loaded]);
+    saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, balance, walletTransactions });
+  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, balance, walletTransactions, loaded]);
+
+  // Centralised token-reward payout for citizen record verification, DAO vote
+  // participation, and whistleblower rewards. Keeps every reward flowing
+  // through the same wallet balance + blockchain trail (see FR6).
+  const awardTokens = useCallback((amount: number, type: string, label: string, meta: Record<string, unknown> = {}) => {
+    if (amount <= 0) return;
+    const block = blockchain.addBlock({ type, amount, timestamp: Date.now(), ...meta });
+    setBalance((prev) => prev + amount);
+    setWalletTransactions((prev) => [{ id: block.hash, type: 'reward', label, amount, timestamp: Date.now() }, ...prev]);
+    setBlockchainRecords((prev) => [
+      ...prev,
+      { id: block.hash, type, amount, label, transactionHash: block.hash, timestamp: Date.now(), verified: false, simulated: true, ...meta },
+    ]);
+  }, []);
   const loadDemoData = useCallback(() => {
     const data = generateDemoData();
     setTenders(data.tenders);
@@ -603,6 +624,21 @@ function AppContent() {
               })}
             </div>
 
+            {/* Simulated Token Wallet — right end of tab strip */}
+            <button
+              onClick={() => setShowWallet(true)}
+              className="flex items-center gap-1.5 rounded-md transition-all focus:outline-none focus:ring-2 focus:ring-[#c99a3c]"
+              style={{ color: '#52514e', padding: '5px 10px', fontSize: '12.5px', fontWeight: 600, background: '#f3f4f6', borderRadius: 8, flexShrink: 0, marginLeft: 8 }}
+              aria-label={t('wallet.title')}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#eef0f2'; e.currentTarget.style.color = '#0b0b0b'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#52514e'; }}
+            >
+              <Coins style={{ width: 15, height: 15, color: '#c99a3c' }} />
+              <span style={{ fontWeight: 700 }}>{t('wallet.title')}</span>
+              <span style={{ opacity: 0.45 }}>·</span>
+              <span>{balance.toLocaleString()} {t('wallet.tok')}</span>
+            </button>
+
             {/* Search — right end of tab strip */}
             <div ref={searchContainerRef} style={{ position: 'relative', flexShrink: 0, marginLeft: 8 }}>
               <div style={{
@@ -798,6 +834,7 @@ function AppContent() {
             userRole={userRole}
             disputes={disputes}
             reports={reports}
+            onAwardTokens={awardTokens}
           />
         )}
         {activePhase === 'dao' && (
@@ -810,6 +847,7 @@ function AppContent() {
             blockchainRecords={blockchainRecords}
             userRole={userRole}
             reports={reports}
+            onAwardTokens={awardTokens}
           />
         )}
         {activePhase === 'whistleblower' && (
@@ -823,6 +861,7 @@ function AppContent() {
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
             userRole={userRole}
+            onAwardTokens={awardTokens}
           />
         )}
         {activePhase === 'reputation' && (
@@ -830,6 +869,8 @@ function AppContent() {
             reputationScores={reputationScores}
             bids={bids}
             contracts={contracts}
+            disputes={disputes}
+            reports={reports}
           />
         )}
         {activePhase === 'supplier' && (
@@ -914,6 +955,20 @@ function AppContent() {
             <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af' }}>{t('role.privilegedNote')}</p>
           </div>
         </div>
+      )}
+
+      {/* Simulated Token Wallet */}
+      {showWallet && createPortal(
+        <WalletPanel
+          balance={balance}
+          setBalance={setBalance}
+          transactions={walletTransactions}
+          setTransactions={setWalletTransactions}
+          blockchainRecords={blockchainRecords}
+          setBlockchainRecords={setBlockchainRecords}
+          onClose={() => setShowWallet(false)}
+        />,
+        document.body
       )}
 
       {/* Accessibility Panel — slide-in from top right */}
