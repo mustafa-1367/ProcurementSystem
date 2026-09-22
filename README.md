@@ -19,7 +19,7 @@ Public procurement faces systemic issues: opaque bid evaluations, contract manip
 
 ### Blockchain & Web3
 - **Smart Contracts** on Ethereum (Sepolia testnet) — role management, procurement records, token-based payments
-- **Wallet Authentication** via MetaMask — on-chain role verification (Citizen, Supplier, Government, Auditor, Oversight)
+- **Wallet Authentication** via MetaMask — on-chain role verification (Supplier, Government, Auditor, Oversight)
 - **Immutable Audit Trail** — every action (tender publish, bid submit, evaluation, payment) recorded on-chain
 
 ### Zero-Knowledge Proofs (ZKP)
