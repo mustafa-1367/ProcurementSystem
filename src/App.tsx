@@ -15,8 +15,7 @@ import { MyContracts } from './components/MyContracts';
 import { DisputesAppeals } from './components/DisputesAppeals';
 import { FeedbackWidget } from './components/FeedbackWidget';
 import { WalletPanel } from './components/WalletPanel';
-import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock, Database, Coins } from 'lucide-react';
-import { generateDemoData } from './data/demoData';
+import { FileText, Gavel, CheckCircle, Eye, Users, AlertTriangle, Award, Activity, Globe, Truck, HelpCircle, UserCheck, Send, Briefcase, Scale, Minus, Plus, Type, Search, X, ArrowRight, Lock, Coins } from 'lucide-react';
 import { blockchain } from './utils/blockchain';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
@@ -124,18 +123,6 @@ function AppContent() {
       { id: block.hash, type, amount, label, transactionHash: block.hash, timestamp: Date.now(), verified: false, simulated: true, ...meta },
     ]);
   }, []);
-  const loadDemoData = useCallback(() => {
-    const data = generateDemoData();
-    setTenders(data.tenders);
-    setBids(data.bids);
-    setContracts(data.contracts);
-    setBlockchainRecords(data.blockchainRecords);
-    setDisputes(data.disputes);
-    setReports(data.reports);
-    setReputationScores(data.reputationScores);
-    setRegisteredSuppliers(data.registeredSuppliers);
-  }, []);
-
   const { t, language, setLanguage, dir } = useTranslation();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('citizen');
@@ -751,20 +738,6 @@ function AppContent() {
           <Activity style={{ width: 15, height: 15, flexShrink: 0 }} />
           {connected ? t('app.blockchainBanner') : t('app.simulationBanner')}
         </span>
-        {tenders.length === 0 && (
-          <button
-            onClick={loadDemoData}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: '#0f2942', color: '#fff', border: 'none', borderRadius: 8,
-              padding: '6px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-          >
-            <Database style={{ width: 13, height: 13 }} />
-            {t('app.loadDemoData')}
-          </button>
-        )}
       </div>
 
       {/* Main Content */}

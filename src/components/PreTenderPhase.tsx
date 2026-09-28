@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Plus, Upload, FileText, Calendar, Banknote, Building, Shield, CheckCircle } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
+import { useWeb3 } from '../utils/useWeb3';
+import { TxHashLink } from './TxHashLink';
 
 interface PreTenderPhaseProps {
   tenders: any[];
@@ -11,6 +13,8 @@ interface PreTenderPhaseProps {
 }
 
 export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, blockchainRecords }: PreTenderPhaseProps) {
+  const { connected, connect } = useWeb3();
+  const [confirmation, setConfirmation] = useState<{ onChain: boolean; hash: string; tenderTitle: string; action: 'created' | 'published' } | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [fundConfirmed, setFundConfirmed] = useState(false);
@@ -118,6 +122,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
 
     setTenders([...tenders, newTender]);
     setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+    setConfirmation({ onChain, hash: contract.transactionHash, tenderTitle: newTender.title, action: 'created' });
     resetCreateFlow();
   };
 
@@ -146,6 +151,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
 
     setTenders(updatedTenders);
     setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+    setConfirmation({ onChain, hash: contract.transactionHash, tenderTitle: tender.title, action: 'published' });
   };
 
   const categories = [
@@ -161,10 +167,29 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
   const departments = [
     { value: 'Ministry of Finance', label: t('preTender.departments.finance') },
     { value: 'Ministry of Public Works', label: t('preTender.departments.publicWorks') },
-    { value: 'Ministry of Health', label: t('preTender.departments.health') },
+    { value: 'Ministry of Public Health', label: t('preTender.departments.health') },
     { value: 'Ministry of Education', label: t('preTender.departments.education') },
+    { value: 'Ministry of Higher Education', label: t('preTender.departments.higherEducation') },
     { value: 'Ministry of Defense', label: t('preTender.departments.defense') },
-    { value: 'Ministry of Agriculture', label: t('preTender.departments.agriculture') },
+    { value: 'Ministry of Interior Affairs', label: t('preTender.departments.interior') },
+    { value: 'Ministry of Agriculture, Irrigation and Livestock', label: t('preTender.departments.agriculture') },
+    { value: 'Ministry of Urban Development and Land', label: t('preTender.departments.urbanDevelopment') },
+    { value: 'Ministry of Energy and Water', label: t('preTender.departments.energyWater') },
+    { value: 'Ministry of Mines and Petroleum', label: t('preTender.departments.mines') },
+    { value: 'Ministry of Communications and Information Technology', label: t('preTender.departments.ict') },
+    { value: 'Ministry of Transport and Civil Aviation', label: t('preTender.departments.transport') },
+    { value: 'Ministry of Commerce and Industry', label: t('preTender.departments.commerce') },
+    { value: 'Ministry of Rural Rehabilitation and Development', label: t('preTender.departments.ruralDevelopment') },
+    { value: 'Ministry of Labor and Social Affairs', label: t('preTender.departments.labor') },
+    { value: 'Ministry of Justice', label: t('preTender.departments.justice') },
+    { value: 'Ministry of Foreign Affairs', label: t('preTender.departments.foreignAffairs') },
+    { value: 'Ministry of Economy', label: t('preTender.departments.economy') },
+    { value: 'Ministry of Information and Culture', label: t('preTender.departments.infoCulture') },
+    { value: 'Ministry of Refugees and Repatriation', label: t('preTender.departments.refugees') },
+    { value: 'National Procurement Authority', label: t('preTender.departments.npa') },
+    { value: 'Da Afghanistan Bank', label: t('preTender.departments.centralBank') },
+    { value: 'Independent Administrative Reform and Civil Service Commission', label: t('preTender.departments.iarcsc') },
+    { value: 'Kabul Municipality', label: t('preTender.departments.kabulMunicipality') },
   ];
 
   const methods = [
@@ -220,6 +245,49 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
 
   return (
     <div className="space-y-4">
+      {/* Transaction confirmation banner — matches the bidder-registration success pattern */}
+      {confirmation && (
+        <div style={{ background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 10, padding: 18, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <CheckCircle style={{ width: 24, height: 24, color: '#065f46', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: '0 0 4px 0', fontWeight: 700, fontSize: 16, color: '#065f46' }}>
+              {confirmation.action === 'created' ? t('preTender.confirmCreatedTitle') : t('preTender.confirmPublishedTitle')}
+            </h3>
+            <p style={{ margin: '0 0 8px 0', fontSize: 14, color: '#047857' }}>
+              <strong>{confirmation.tenderTitle}</strong>{' '}
+              {confirmation.action === 'created' ? t('preTender.confirmCreatedBody') : t('preTender.confirmPublishedBody')}{' '}
+              {confirmation.onChain ? t('preTender.confirmOnChainSuffix') : t('preTender.confirmSimulatedSuffix')}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {confirmation.onChain ? (
+                <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  ● {t('preTender.confirmOnChainBadge')}
+                </span>
+              ) : (
+                <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  ● {t('preTender.confirmSimulatedBadge')}
+                </span>
+              )}
+              {confirmation.onChain && <TxHashLink hash={confirmation.hash} truncate={22} showIcon />}
+              {!confirmation.onChain && !connected && (
+                <button
+                  onClick={connect}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#2563eb', color: '#fff', padding: '4px 12px', borderRadius: 999, fontSize: 11.5, fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                >
+                  {t('preTender.confirmConnectRetry')}
+                </button>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setConfirmation(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280', padding: 4 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
         <div>
