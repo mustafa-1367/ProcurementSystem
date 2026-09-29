@@ -26,16 +26,27 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
   });
 
   const [eligibilityError, setEligibilityError] = useState(false);
+  const [notInvitedError, setNotInvitedError] = useState(false);
   const [bidSuccess, setBidSuccess] = useState<{ bidId: string; tenderTitle: string; vendorName: string; amount: string; onChain: boolean } | null>(null);
 
   const publishedTenders = tenders.filter((td) => td.status === 'published');
   const myBids = bids;
   const isRegisteredByName = (name: string) =>
     registeredSuppliers.some((s) => s.companyName?.toLowerCase().trim() === name?.toLowerCase().trim());
+  // Art. 3(9): Restricted Tendering — only bidders on the tender's invited list may submit.
+  const isInvited = (tender: any, name: string) =>
+    tender.method !== 'Restricted Bidding' ||
+    (tender.invitedBidders || []).some((n: string) => n.toLowerCase().trim() === name?.toLowerCase().trim());
 
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTender) return;
+
+    if (!isInvited(selectedTender, bidForm.vendorName)) {
+      setNotInvitedError(true);
+      return;
+    }
+    setNotInvitedError(false);
 
     const registeredSupplier = registeredSuppliers.find(
       (s) => s.companyName?.toLowerCase().trim() === bidForm.vendorName?.toLowerCase().trim()
@@ -348,6 +359,19 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 13, color: '#b91c1c', marginBottom: 2 }}>{t('tendering.kycRequired')}</div>
                     <div style={{ fontSize: 12.5, color: '#991b1b', lineHeight: 1.5 }}>{t('tendering.kycRequiredDesc')}</div>
+                  </div>
+                </div>
+              )}
+
+              {notInvitedError && (
+                <div style={{
+                  background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px',
+                  display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 16,
+                }}>
+                  <ShieldCheck style={{ width: 18, height: 18, color: '#b91c1c', flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#b91c1c', marginBottom: 2 }}>Not on the invited bidders list</div>
+                    <div style={{ fontSize: 12.5, color: '#991b1b', lineHeight: 1.5 }}>This is a Restricted Bidding tender (Art. 3(9)) — only companies named in the invitation may submit a bid.</div>
                   </div>
                 </div>
               )}

@@ -347,6 +347,9 @@ export function PostTenderingPhase({
 
   const awardContract = async (tender: any, bid: any) => {
     const datum = getEvalDatum(bid.id);
+    // Single-source contracts are exempt from the standstill/objection period —
+    // Art. 43(4): "Single-source contracts are not subjected to this article."
+    const isSingleSource = tender.method === 'Single-Source';
     const newContract = {
       id: `CNT-${Date.now()}`,
       tenderId: tender.id,
@@ -356,9 +359,10 @@ export function PostTenderingPhase({
       vendorEmail: bid.vendorEmail,
       amount: bid.amount,
       timeline: bid.timeline,
-      status: 'standstill',
+      status: isSingleSource ? 'active' : 'standstill',
       awardDecisionDate: new Date().toISOString(),
-      standstillEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      standstillEndDate: isSingleSource ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      standstillExempt: isSingleSource,
       awardedAt: new Date().toISOString(),
       evaluationSummary: {
         technicalScore: datum.technicalScore,
@@ -394,7 +398,7 @@ export function PostTenderingPhase({
     };
 
     const updatedTenders = tenders.map((td) =>
-      td.id === tender.id ? { ...td, status: 'standstill' } : td
+      td.id === tender.id ? { ...td, status: isSingleSource ? 'awarded' : 'standstill' } : td
     );
 
     const emailResult = await sendWinnerNotificationEmail({
@@ -1263,6 +1267,9 @@ export function PostTenderingPhase({
               const isAwarded = tender.status === 'awarded' || tender.status === 'standstill';
               const currentStage = getCurrentStage(tender.id);
               const isSelected = selectedTender?.id === tender.id;
+              // Art. 3(10): Single-source is "concluded directly without tendering" —
+              // no competitive multi-stage evaluation applies.
+              const isSingleSource = tender.method === 'Single-Source';
 
               return (
                 <div key={tender.id} style={cardStyle}>
@@ -1296,7 +1303,34 @@ export function PostTenderingPhase({
                     )}
                   </div>
 
-                  {isSelected && !isAwarded && (
+                  {isSelected && !isAwarded && isSingleSource && (
+                    <div style={{ borderTop: '1px solid rgba(11,11,11,0.08)', paddingTop: 16 }}>
+                      <div style={{ background: '#f3eefe', border: '1px solid #ddd6fe', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: '12.5px', color: '#5b21b6' }}>
+                        Single-source procurement (Art. 3(10)): concluded directly, without competitive tendering or multi-stage evaluation.
+                        {tender.singleSourceJustification && (
+                          <div style={{ marginTop: 4 }}><strong>Justification:</strong> {tender.singleSourceJustification}</div>
+                        )}
+                      </div>
+                      {tenderBids.slice(0, 1).map((bid) => (
+                        <div key={bid.id} style={cardStyle}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <span style={{ fontWeight: 700, color: '#0f2942', fontSize: '14px' }}>{bid.vendorName}</span>
+                            <span style={{ fontSize: '13px', color: '#6b7280' }}>{Number(bid.amount).toLocaleString()} AFN</span>
+                          </div>
+                          <button
+                            style={{ ...navyBtnStyle, background: '#065f46' }}
+                            onClick={() => awardContract(tender, bid)}
+                          >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <Award style={{ width: 14, height: 14 }} /> Award Contract (Direct)
+                            </span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isSelected && !isAwarded && !isSingleSource && (
                     <div style={{ borderTop: '1px solid rgba(11,11,11,0.08)', paddingTop: 16 }}>
                       {renderStepper(tender.id)}
                       {currentStage === 1 && renderStage1(tender)}
@@ -1362,6 +1396,11 @@ export function PostTenderingPhase({
                         {blockchainRecords.some((r) => r.contractId === contractObj.id && r.onChain) && (
                           <span style={{ ...badgeStyle, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             ● On-Chain
+                          </span>
+                        )}
+                        {contractObj.standstillExempt && (
+                          <span style={{ ...badgeStyle, color: '#5b21b6', background: '#ede9fe' }} title="Art. 43(4): Single-source contracts are not subjected to this article">
+                            Single-source — standstill exempt
                           </span>
                         )}
                       </div>

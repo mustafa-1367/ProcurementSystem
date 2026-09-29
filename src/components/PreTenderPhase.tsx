@@ -20,7 +20,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
   const [fundConfirmed, setFundConfirmed] = useState(false);
   const [methodSelected, setMethodSelected] = useState(false);
   const [fundData, setFundData] = useState({ estimatedValue: '', budgetLine: '' });
-  const [methodData, setMethodData] = useState({ method: 'Open Bidding', singleSourceJustification: '' });
+  const [methodData, setMethodData] = useState({ method: 'Open Bidding', singleSourceJustification: '', invitedBidders: '' });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -73,6 +73,9 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
 
   const handleSelectMethod = () => {
     if (methodData.method === 'Single-Source' && !methodData.singleSourceJustification) return;
+    // Art. 3(9): Restricted Tendering means "a limited number of bidders are invited" —
+    // require the invited list before the method can be confirmed.
+    if (methodData.method === 'Restricted Bidding' && !methodData.invitedBidders.trim()) return;
     setMethodSelected(true);
     setCurrentStep(3);
   };
@@ -83,7 +86,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     setFundConfirmed(false);
     setMethodSelected(false);
     setFundData({ estimatedValue: '', budgetLine: '' });
-    setMethodData({ method: 'Open Bidding', singleSourceJustification: '' });
+    setMethodData({ method: 'Open Bidding', singleSourceJustification: '', invitedBidders: '' });
     setFormData({ title: '', description: '', department: '', budget: '', category: '', deadline: '', requirements: '', procurementType: '' });
   };
 
@@ -95,6 +98,9 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       id: `TND-${Date.now()}`,
       ...formData,
       method: methodData.method,
+      invitedBidders: methodData.method === 'Restricted Bidding'
+        ? methodData.invitedBidders.split(',').map((n) => n.trim()).filter(Boolean)
+        : null,
       procurementType: formData.procurementType,
       budgetLine: fundData.budgetLine,
       status: 'draft',
@@ -405,6 +411,19 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                     placeholder={t('preTender.singleSourcePlaceholder')}
                     style={{ ...inputStyle, resize: 'vertical' }}
                   />
+                </div>
+              )}
+              {methodData.method === 'Restricted Bidding' && !methodSelected && (
+                <div style={{ marginBottom: 13 }}>
+                  <label style={labelStyle}>Invited bidders (comma-separated company names)</label>
+                  <textarea
+                    value={methodData.invitedBidders}
+                    onChange={(e) => setMethodData({ ...methodData, invitedBidders: e.target.value })}
+                    rows={3}
+                    placeholder="e.g. Kabul Construction Co, Afghan Star Construction Co, Herat Builders Ltd"
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                  />
+                  <div style={hintStyle}>Art. 3(9): only bidders on this list may submit a bid on this tender.</div>
                 </div>
               )}
               <div style={{ ...hintStyle, marginBottom: 10, marginTop: 0 }}>{t('preTender.methodHint')}</div>
