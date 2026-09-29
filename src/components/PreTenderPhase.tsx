@@ -71,11 +71,16 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     setCurrentStep(2);
   };
 
+  const RFQ_THRESHOLD_AFN = 500000;
+
   const handleSelectMethod = () => {
     if (methodData.method === 'Single-Source' && !methodData.singleSourceJustification) return;
     // Art. 3(9): Restricted Tendering means "a limited number of bidders are invited" —
     // require the invited list before the method can be confirmed.
     if (methodData.method === 'Restricted Bidding' && !methodData.invitedBidders.trim()) return;
+    // Procurement Procedures Rule 19(1): RFQ only usable when estimated value does not
+    // exceed the Art. 63/NPA-set threshold (500,000 AFN).
+    if (methodData.method === 'Request for Quotations' && Number(fundData.estimatedValue) > RFQ_THRESHOLD_AFN) return;
     setMethodSelected(true);
     setCurrentStep(3);
   };
@@ -424,6 +429,17 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                     style={{ ...inputStyle, resize: 'vertical' }}
                   />
                   <div style={hintStyle}>Art. 3(9): only bidders on this list may submit a bid on this tender.</div>
+                </div>
+              )}
+              {methodData.method === 'Request for Quotations' && !methodSelected && (
+                <div style={{ marginBottom: 13 }}>
+                  {Number(fundData.estimatedValue) > RFQ_THRESHOLD_AFN ? (
+                    <div style={{ fontSize: '12.5px', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px' }}>
+                      Estimated value ({Number(fundData.estimatedValue).toLocaleString()} AFN) exceeds the RFQ threshold of {RFQ_THRESHOLD_AFN.toLocaleString()} AFN — Procurement Procedures Rule 19(1) / Art. 63. Use Open Bidding or another method instead.
+                    </div>
+                  ) : (
+                    <div style={hintStyle}>Rule 19(1): usable only up to {RFQ_THRESHOLD_AFN.toLocaleString()} AFN. Rule 19(4): requires quotations from at least 3 sources before award.</div>
+                  )}
                 </div>
               )}
               <div style={{ ...hintStyle, marginBottom: 10, marginTop: 0 }}>{t('preTender.methodHint')}</div>

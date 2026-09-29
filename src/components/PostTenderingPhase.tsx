@@ -1270,6 +1270,12 @@ export function PostTenderingPhase({
               // Art. 3(10): Single-source is "concluded directly without tendering" —
               // no competitive multi-stage evaluation applies.
               const isSingleSource = tender.method === 'Single-Source';
+              // Procurement Procedures Rule 19: RFQ requires quotations from at least
+              // 3 sources (19(4)) and awards to the lowest price only (19(7)) — no
+              // multi-stage technical/financial evaluation.
+              const isRFQ = tender.method === 'Request for Quotations';
+              const RFQ_MIN_QUOTATIONS = 3;
+              const rfqReady = !isRFQ || tenderBids.length >= RFQ_MIN_QUOTATIONS;
 
               return (
                 <div key={tender.id} style={cardStyle}>
@@ -1289,6 +1295,10 @@ export function PostTenderingPhase({
                     {isAwarded ? (
                       <span style={{ ...badgeStyle, background: tender.status === 'standstill' ? '#fef3c7' : '#d1fae5', color: tender.status === 'standstill' ? '#92400e' : '#065f46' }}>
                         {tender.status === 'standstill' ? 'Standstill Period' : 'Contract Awarded'}
+                      </span>
+                    ) : !rfqReady ? (
+                      <span style={{ ...badgeStyle, background: '#f3f4f6', color: '#6b7280' }} title="Rule 19(4): RFQ requires quotations from at least 3 sources">
+                        Awaiting quotations ({tenderBids.length}/{RFQ_MIN_QUOTATIONS})
                       </span>
                     ) : (
                       <button
@@ -1330,7 +1340,38 @@ export function PostTenderingPhase({
                     </div>
                   )}
 
-                  {isSelected && !isAwarded && !isSingleSource && (
+                  {isSelected && !isAwarded && isRFQ && (
+                    <div style={{ borderTop: '1px solid rgba(11,11,11,0.08)', paddingTop: 16 }}>
+                      <div style={{ background: '#eef5fd', border: '1px solid #bcd6f5', borderRadius: 8, padding: 12, marginBottom: 14, fontSize: '12.5px', color: '#1c5cab' }}>
+                        Request for Quotations (Rule 19(7)): the lowest-priced quotation meeting requirements is selected — no multi-stage technical/financial evaluation applies.
+                      </div>
+                      {[...tenderBids].sort((a, b) => Number(a.amount) - Number(b.amount)).map((bid, idx) => (
+                        <div key={bid.id} style={{ ...cardStyle, marginBottom: 8, background: idx === 0 ? '#fefce8' : cardStyle.background }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: idx === 0 ? 8 : 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontWeight: 700, color: '#0f2942', fontSize: '14px' }}>{bid.vendorName}</span>
+                              {idx === 0 && (
+                                <span style={{ ...badgeStyle, background: GOLD, color: '#fff' }}>Lowest Price</span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: '13px', color: '#6b7280' }}>{Number(bid.amount).toLocaleString()} AFN</span>
+                          </div>
+                          {idx === 0 && (
+                            <button
+                              style={{ ...navyBtnStyle, background: '#065f46' }}
+                              onClick={() => awardContract(tender, bid)}
+                            >
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <Award style={{ width: 14, height: 14 }} /> Award to Lowest Price
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {isSelected && !isAwarded && !isSingleSource && !isRFQ && (
                     <div style={{ borderTop: '1px solid rgba(11,11,11,0.08)', paddingTop: 16 }}>
                       {renderStepper(tender.id)}
                       {currentStage === 1 && renderStage1(tender)}
