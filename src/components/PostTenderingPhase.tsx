@@ -243,6 +243,28 @@ export function PostTenderingPhase({
     }
   };
 
+  // Rule 72(2): lowest-priced qualified bid scores 100 points; others score
+  // proportionally down from it (lowestAmount / thisAmount * 100). Applied
+  // here to every method's financial component (not just QCBS) so the price
+  // score can never be hand-typed by an evaluator — it is derived only from
+  // the bid amount actually submitted.
+  const computeAutoFinancialScore = (tenderId: string, bidId: string): number => {
+    const tenderBids = getTenderBids(tenderId);
+    const qualifiedAmounts = tenderBids
+      .filter((b) => {
+        const d = getEvalDatum(b.id);
+        return d.preliminaryPass && d.qualificationPass;
+      })
+      .map((b) => Number(b.amount))
+      .filter((a) => a > 0);
+    if (qualifiedAmounts.length === 0) return 0;
+    const lowestAmount = Math.min(...qualifiedAmounts);
+    const bid = tenderBids.find((b) => b.id === bidId);
+    const thisAmount = Number(bid?.amount) || 0;
+    if (thisAmount <= 0) return 0;
+    return Math.round((lowestAmount / thisAmount) * 10000) / 100;
+  };
+
   const computeCombinedScores = (tenderId: string) => {
     const tender = tenders.find((td) => td.id === tenderId);
     const procType = tender?.procurementType || 'Goods';
@@ -254,6 +276,7 @@ export function PostTenderingPhase({
       tenderBids.forEach((bid) => {
         const datum = updated[bid.id] || getEvalDatum(bid.id);
         if (datum.preliminaryPass && datum.qualificationPass) {
+          datum.financialScore = computeAutoFinancialScore(tenderId, bid.id);
           const adjustedFinancial = datum.financialScore + datum.domesticPreference;
           datum.combinedScore = Math.round((datum.technicalScore * 0.7 + Math.min(100, adjustedFinancial) * 0.3) * 100) / 100;
         }
@@ -265,6 +288,7 @@ export function PostTenderingPhase({
       tenderBids.forEach((bid) => {
         const datum = updated[bid.id] || getEvalDatum(bid.id);
         if (datum.preliminaryPass && datum.qualificationPass) {
+          datum.financialScore = computeAutoFinancialScore(tenderId, bid.id);
           const adjustedFinancial = datum.financialScore + datum.domesticPreference;
           datum.combinedScore = Math.round((datum.technicalScore * 0.3 + Math.min(100, adjustedFinancial) * 0.7) * 100) / 100;
         }
@@ -837,6 +861,7 @@ export function PostTenderingPhase({
             ? 'Financial weight: 30% (QCBS method, per Procurement Procedures — Art. 22(6))'
             : 'Financial weight: 70% (Lowest Evaluated Bid per Art. 22(5))'}
           {' — Domestic firms may receive a 25% price preference.'}
+          {' Financial score is auto-calculated from each bid’s submitted amount (Rule 72(2)) — no evaluator can enter it manually.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {qualifiedBids.map((bid) => {
@@ -868,21 +893,26 @@ export function PostTenderingPhase({
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Financial Score (0-100):</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={datum.financialScore || ''}
-                      onChange={(e) => updateEvalDatum(bid.id, { financialScore: Math.min(100, Math.max(0, Number(e.target.value))) })}
+                    <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Financial Score:</label>
+                    <span
+                      title="Auto-calculated from the submitted bid amount (Rule 72(2): lowest qualified bid = 100 points, others scored proportionally). Not editable — cannot be hand-typed by an evaluator."
                       style={{
-                        width: 80,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        width: 'fit-content',
                         padding: '6px 10px',
                         border: '1px solid rgba(11,11,11,0.15)',
                         borderRadius: 6,
                         fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#0f2942',
+                        background: '#f9fafb',
                       }}
-                    />
+                    >
+                      {computeAutoFinancialScore(tender.id, bid.id)}/100
+                      <Shield style={{ width: 12, height: 12, color: '#065f46' }} />
+                    </span>
                   </div>
                   {/* 25% Domestic Preference */}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '13px', color: '#374151', background: datum.isDomestic ? '#fefce8' : 'transparent', padding: '4px 10px', borderRadius: 6, border: datum.isDomestic ? '1px solid #fcd34d' : '1px solid transparent' }}>
