@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Award, CheckCircle, Banknote, Calendar, FileText, Shield, AlertCircle, Clock, Flag, ChevronDown, ChevronUp } from 'lucide-react';
+import { Award, CheckCircle, Banknote, Calendar, FileText, Shield, AlertCircle, Clock, Flag, ChevronDown, ChevronUp, Mail } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
+import { sendWinnerNotificationEmail } from '../utils/emailNotify';
 
 interface PostTenderingPhaseProps {
   tenders: any[];
@@ -396,7 +397,15 @@ export function PostTenderingPhase({
       td.id === tender.id ? { ...td, status: 'standstill' } : td
     );
 
-    setContracts([...contracts, newContract]);
+    const emailResult = await sendWinnerNotificationEmail({
+      vendorEmail: bid.vendorEmail,
+      vendorName: bid.vendorName,
+      tenderTitle: tender.title,
+      amount: bid.amount,
+      contractId: newContract.id,
+    });
+
+    setContracts([...contracts, { ...newContract, emailNotification: emailResult.status }]);
     setTenders(updatedTenders);
     setBlockchainRecords([...blockchainRecords, blockchainRecord]);
     setSelectedTender(null);
@@ -1396,6 +1405,28 @@ export function PostTenderingPhase({
                         <div style={{ marginTop: 10, fontSize: '12px', color: '#78350f' }}>
                           <span style={{ fontWeight: 600 }}>Award Decision: </span>
                           Technical: {contractObj.evaluationSummary.technicalScore} | Financial: {contractObj.evaluationSummary.financialScore} | Combined: {contractObj.evaluationSummary.combinedScore.toFixed(2)}
+                        </div>
+                      )}
+
+                      {/* Winner Email Notification Status */}
+                      {contractObj.emailNotification && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                          <Mail style={{ width: 13, height: 13, color: '#6b7280' }} />
+                          {contractObj.emailNotification === 'sent' && (
+                            <span style={{ ...badgeStyle, background: '#d1fae5', color: '#065f46' }}>
+                              Winner notified by email
+                            </span>
+                          )}
+                          {contractObj.emailNotification === 'failed' && (
+                            <span style={{ ...badgeStyle, background: '#fee2e2', color: '#991b1b' }}>
+                              Email notification failed
+                            </span>
+                          )}
+                          {contractObj.emailNotification === 'not_configured' && (
+                            <span style={{ ...badgeStyle, background: '#f3f4f6', color: '#6b7280' }} title="Set VITE_EMAILJS_SERVICE_ID, VITE_EMAILJS_TEMPLATE_ID, and VITE_EMAILJS_PUBLIC_KEY to enable">
+                              Email notifications not configured
+                            </span>
+                          )}
                         </div>
                       )}
 

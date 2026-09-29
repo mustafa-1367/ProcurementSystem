@@ -22,6 +22,7 @@ A full-stack decentralized application (dApp) that brings transparency and accou
 | **Smart contracts deployed (Sepolia)** | None. | 4 contracts: `ProcurementSystem`, `ProcToken`, `WhistleblowerVerifier`, `Groth16Verifier` (addresses below). |
 | **Audit dashboard** | Simulated data only. | Reads real on-chain events when a wallet is connected; falls back to local simulation otherwise, with on-chain/simulated status labeled in the UI per record. |
 | **Citizen incentive tokens** | Not implemented. | Reward amounts are tracked and displayed in-app via a local, in-memory simulated ledger (`blockchain.ts`'s `BlockchainService.addBlock()`) — **not** the deployed `ProcToken` ERC-20 contract. Resets on page reload; no real token custody. |
+| **Winner email notification** | Not implemented. | Real, verified working (`src/utils/emailNotify.ts`, EmailJS, client-side, no backend) — fires on `awardContract()` and delivers an actual email to the winning bidder. **Requires the deployer's own EmailJS credentials in `.env.local`** (see `.env.example`); since GitHub Pages is static hosting, this only works where those credentials were present at build time. The public live deployment does not have them configured, so it currently falls back to showing "Email notifications not configured" there. |
 
 ---
 
