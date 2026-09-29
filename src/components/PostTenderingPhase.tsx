@@ -250,7 +250,7 @@ export function PostTenderingPhase({
     const updated = { ...evalData };
 
     if (procType === 'Services') {
-      // QCBS: 70% technical + 30% financial (Art. 44)
+      // QCBS: 70% technical + 30% financial (split not fixed by the Law itself — Art. 22(6) defers Consultants' Services evaluation to Procurement Procedures)
       tenderBids.forEach((bid) => {
         const datum = updated[bid.id] || getEvalDatum(bid.id);
         if (datum.preliminaryPass && datum.qualificationPass) {
@@ -744,7 +744,7 @@ export function PostTenderingPhase({
         </h5>
         <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
           Criteria for <strong>{procType}</strong> procurement
-          {procType === 'Services' ? ' (QCBS — Art. 44)' : ' (Lowest Evaluated Bid — Art. 43)'}
+          {procType === 'Services' ? ' (QCBS, per Procurement Procedures — Art. 22(6))' : ' (Lowest Evaluated Bid — Art. 22(5))'}
         </p>
 
         {/* Criteria breakdown info */}
@@ -830,8 +830,8 @@ export function PostTenderingPhase({
         </h5>
         <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
           {procType === 'Services'
-            ? 'Financial weight: 30% (QCBS method per Art. 44)'
-            : 'Financial weight: 70% (Lowest Evaluated Bid per Art. 43)'}
+            ? 'Financial weight: 30% (QCBS method, per Procurement Procedures — Art. 22(6))'
+            : 'Financial weight: 70% (Lowest Evaluated Bid per Art. 22(5))'}
           {' — Domestic firms may receive a 25% price preference.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -949,8 +949,8 @@ export function PostTenderingPhase({
         </h5>
         <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: 12 }}>
           {isServices
-            ? 'QCBS method: Technical 70% + Financial 30% (Art. 44)'
-            : 'Lowest Evaluated Bid: Technical 30% + Financial 70% (Art. 43)'}
+            ? 'QCBS method: Technical 70% + Financial 30% (per Procurement Procedures — Art. 22(6))'
+            : 'Lowest Evaluated Bid: Technical 30% + Financial 70% (Art. 22(5))'}
         </p>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
