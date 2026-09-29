@@ -765,6 +765,7 @@ function AppContent() {
             setTenders={setTenders}
             setBlockchainRecords={setBlockchainRecords}
             blockchainRecords={blockchainRecords}
+            registeredSuppliers={registeredSuppliers}
           />
         )}
         {activePhase === 'tender' && (

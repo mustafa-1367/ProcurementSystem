@@ -36,7 +36,7 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
   // Art. 3(9): Restricted Tendering — only bidders on the tender's invited list may submit.
   const isInvited = (tender: any, name: string) =>
     tender.method !== 'Restricted Bidding' ||
-    (tender.invitedBidders || []).some((n: string) => n.toLowerCase().trim() === name?.toLowerCase().trim());
+    (tender.invitedBidders || []).some((b: any) => b.name?.toLowerCase().trim() === name?.toLowerCase().trim());
 
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();

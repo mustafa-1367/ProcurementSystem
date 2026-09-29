@@ -1,18 +1,25 @@
 import { useState } from 'react';
 import { Plus, Upload, FileText, Calendar, Banknote, Building, Shield, CheckCircle } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
+import { sendInvitationEmail } from '../utils/emailNotify';
 import { useTranslation } from '../utils/i18n';
 import { useWeb3 } from '../utils/useWeb3';
 import { TxHashLink } from './TxHashLink';
+
+interface InvitedBidder {
+  name: string;
+  email: string;
+}
 
 interface PreTenderPhaseProps {
   tenders: any[];
   setTenders: (tenders: any[]) => void;
   setBlockchainRecords: (records: any[]) => void;
   blockchainRecords: any[];
+  registeredSuppliers: any[];
 }
 
-export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, blockchainRecords }: PreTenderPhaseProps) {
+export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, blockchainRecords, registeredSuppliers }: PreTenderPhaseProps) {
   const { connected, connect } = useWeb3();
   const [confirmation, setConfirmation] = useState<{ onChain: boolean; hash: string; tenderTitle: string; action: 'created' | 'published' } | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -20,7 +27,39 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
   const [fundConfirmed, setFundConfirmed] = useState(false);
   const [methodSelected, setMethodSelected] = useState(false);
   const [fundData, setFundData] = useState({ estimatedValue: '', budgetLine: '' });
-  const [methodData, setMethodData] = useState({ method: 'Open Bidding', singleSourceJustification: '', invitedBidders: '' });
+  const [methodData, setMethodData] = useState({ method: 'Open Bidding', singleSourceJustification: '' });
+  // Restricted Bidding (Art. 3(9)) invited-bidders list: picked from already
+  // e-KYC-registered suppliers (verified email on file) plus a manual
+  // name+email fallback for genuine outreach to not-yet-registered companies.
+  const [selectedInvitees, setSelectedInvitees] = useState<Set<string>>(new Set());
+  const [manualInvitees, setManualInvitees] = useState<InvitedBidder[]>([]);
+  const [manualInviteDraft, setManualInviteDraft] = useState({ name: '', email: '' });
+
+  const toggleInvitee = (companyName: string) => {
+    setSelectedInvitees((prev) => {
+      const next = new Set(prev);
+      if (next.has(companyName)) next.delete(companyName);
+      else next.add(companyName);
+      return next;
+    });
+  };
+
+  const addManualInvitee = () => {
+    if (!manualInviteDraft.name.trim() || !manualInviteDraft.email.trim()) return;
+    setManualInvitees((prev) => [...prev, { name: manualInviteDraft.name.trim(), email: manualInviteDraft.email.trim() }]);
+    setManualInviteDraft({ name: '', email: '' });
+  };
+
+  const removeManualInvitee = (email: string) => {
+    setManualInvitees((prev) => prev.filter((m) => m.email !== email));
+  };
+
+  const getInvitedBidders = (): InvitedBidder[] => {
+    const fromRegistered: InvitedBidder[] = registeredSuppliers
+      .filter((s: any) => selectedInvitees.has(s.companyName))
+      .map((s: any) => ({ name: s.companyName, email: s.email }));
+    return [...fromRegistered, ...manualInvitees];
+  };
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -77,7 +116,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     if (methodData.method === 'Single-Source' && !methodData.singleSourceJustification) return;
     // Art. 3(9): Restricted Tendering means "a limited number of bidders are invited" —
     // require the invited list before the method can be confirmed.
-    if (methodData.method === 'Restricted Bidding' && !methodData.invitedBidders.trim()) return;
+    if (methodData.method === 'Restricted Bidding' && getInvitedBidders().length === 0) return;
     // Procurement Procedures Rule 19(1): RFQ only usable when estimated value does not
     // exceed the Art. 63/NPA-set threshold (500,000 AFN).
     if (methodData.method === 'Request for Quotations' && Number(fundData.estimatedValue) > RFQ_THRESHOLD_AFN) return;
@@ -91,7 +130,10 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     setFundConfirmed(false);
     setMethodSelected(false);
     setFundData({ estimatedValue: '', budgetLine: '' });
-    setMethodData({ method: 'Open Bidding', singleSourceJustification: '', invitedBidders: '' });
+    setMethodData({ method: 'Open Bidding', singleSourceJustification: '' });
+    setSelectedInvitees(new Set());
+    setManualInvitees([]);
+    setManualInviteDraft({ name: '', email: '' });
     setFormData({ title: '', description: '', department: '', budget: '', category: '', deadline: '', requirements: '', procurementType: '' });
   };
 
@@ -103,9 +145,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       id: `TND-${Date.now()}`,
       ...formData,
       method: methodData.method,
-      invitedBidders: methodData.method === 'Restricted Bidding'
-        ? methodData.invitedBidders.split(',').map((n) => n.trim()).filter(Boolean)
-        : null,
+      invitedBidders: methodData.method === 'Restricted Bidding' ? getInvitedBidders() : null,
       procurementType: formData.procurementType,
       budgetLine: fundData.budgetLine,
       status: 'draft',
@@ -138,11 +178,30 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
   };
 
   const publishTender = async (tenderId: string) => {
-    const updatedTenders = tenders.map((td) =>
-      td.id === tenderId ? { ...td, status: 'published', publishedAt: new Date().toISOString() } : td
-    );
-
     const tender = tenders.find((td) => td.id === tenderId);
+
+    // Art. 3(9): send the actual invitation to each invited bidder once the
+    // Restricted Bidding tender goes live — not just a passive listing.
+    let invitationResults: { name: string; status: string; error?: string }[] = [];
+    if (tender.method === 'Restricted Bidding' && Array.isArray(tender.invitedBidders)) {
+      invitationResults = await Promise.all(
+        tender.invitedBidders.map(async (invitee: InvitedBidder) => {
+          const result = await sendInvitationEmail({
+            vendorEmail: invitee.email,
+            vendorName: invitee.name,
+            tenderTitle: tender.title,
+            deadline: tender.deadline,
+          });
+          return { name: invitee.name, status: result.status, error: (result as any).error };
+        })
+      );
+    }
+
+    const updatedTenders = tenders.map((td) =>
+      td.id === tenderId
+        ? { ...td, status: 'published', publishedAt: new Date().toISOString(), invitationEmailResults: invitationResults.length ? invitationResults : undefined }
+        : td
+    );
 
     const { block, contract, onChain } = await addProcurementRecordAsync('tender', {
       action: 'publish',
@@ -420,15 +479,59 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
               )}
               {methodData.method === 'Restricted Bidding' && !methodSelected && (
                 <div style={{ marginBottom: 13 }}>
-                  <label style={labelStyle}>Invited bidders (comma-separated company names)</label>
-                  <textarea
-                    value={methodData.invitedBidders}
-                    onChange={(e) => setMethodData({ ...methodData, invitedBidders: e.target.value })}
-                    rows={3}
-                    placeholder="e.g. Kabul Construction Co, Afghan Star Construction Co, Herat Builders Ltd"
-                    style={{ ...inputStyle, resize: 'vertical' }}
-                  />
-                  <div style={hintStyle}>Art. 3(9): only bidders on this list may submit a bid on this tender.</div>
+                  <label style={labelStyle}>Invited bidders</label>
+
+                  {registeredSuppliers.length > 0 ? (
+                    <div style={{ maxHeight: 160, overflowY: 'auto', border: '1px solid rgba(11,11,11,0.15)', borderRadius: 8, padding: 8 }}>
+                      {registeredSuppliers.map((s: any) => (
+                        <label key={s.companyName} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 2px', cursor: 'pointer', fontSize: '13px' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedInvitees.has(s.companyName)}
+                            onChange={() => toggleInvitee(s.companyName)}
+                            style={{ accentColor: '#0f2942' }}
+                          />
+                          <span style={{ fontWeight: 600, color: '#374151' }}>{s.companyName}</span>
+                          <span style={{ color: '#9ca3af', fontSize: '11.5px' }}>{s.email}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={hintStyle}>No e-KYC-registered suppliers yet — use "not yet registered" below to invite by name and email.</div>
+                  )}
+
+                  <div style={{ marginTop: 10, fontSize: '11.5px', fontWeight: 600, color: '#6e6c66' }}>
+                    Invite a company not yet registered:
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <input
+                      type="text"
+                      value={manualInviteDraft.name}
+                      onChange={(e) => setManualInviteDraft({ ...manualInviteDraft, name: e.target.value })}
+                      placeholder="Company name"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <input
+                      type="email"
+                      value={manualInviteDraft.email}
+                      onChange={(e) => setManualInviteDraft({ ...manualInviteDraft, email: e.target.value })}
+                      placeholder="Email"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button type="button" onClick={addManualInvitee} style={{ ...btnGold, padding: '9px 12px' }}>Add</button>
+                  </div>
+                  {manualInvitees.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {manualInvitees.map((m) => (
+                        <div key={m.email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12.5px', background: '#f6f5f2', borderRadius: 6, padding: '4px 8px' }}>
+                          <span>{m.name} — {m.email}</span>
+                          <button type="button" onClick={() => removeManualInvitee(m.email)} style={{ background: 'none', border: 'none', color: '#b91c1c', cursor: 'pointer', fontSize: '12px' }}>Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={hintStyle}>Art. 3(9): only invited bidders may submit a bid on this tender. Each invited bidder receives an email invitation when the tender is published.</div>
                 </div>
               )}
               {methodData.method === 'Request for Quotations' && !methodSelected && (
@@ -644,6 +747,19 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                     {blockchainRecords.some(r => r.tenderId === tender.id && r.onChain) && (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#065f46', background: '#d1fae5', border: '1px solid #6ee7b7' }}>● On-Chain</span>
                     )}
+                    {tender.invitationEmailResults && (() => {
+                      const sent = tender.invitationEmailResults.filter((r: any) => r.status === 'sent').length;
+                      const total = tender.invitationEmailResults.length;
+                      const allNotConfigured = tender.invitationEmailResults.every((r: any) => r.status === 'not_configured');
+                      return (
+                        <span
+                          title={tender.invitationEmailResults.map((r: any) => `${r.name}: ${r.status}${r.error ? ` (${r.error})` : ''}`).join(', ')}
+                          style={{ display: 'inline-block', marginLeft: 6, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: allNotConfigured ? '#6b7280' : '#065f46', background: allNotConfigured ? '#f3f4f6' : '#d1fae5' }}
+                        >
+                          {allNotConfigured ? 'Invitations not configured' : `${sent}/${total} invitations sent`}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td style={{ padding: 10, borderBottom: idx === tenders.length - 1 ? 'none' : '1px solid #e1e0d9' }}>
                     {tender.status === 'draft' && (
