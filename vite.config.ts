@@ -5,7 +5,7 @@
   import path from 'path';
 
   export default defineConfig({
-    // Base path for GitHub Pages (repo hosted at https://saaysalim.github.io/ProcurementSystem)
+    // Base path for GitHub Pages (repo hosted at https://mustafa-1367.github.io/ProcurementSystem)
     base: '/ProcurementSystem/',
     plugins: [react(), nodePolyfills()],
     resolve: {
