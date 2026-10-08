@@ -20,8 +20,10 @@ import { blockchain } from './utils/blockchain';
 import { Web3Status } from './components/Web3Status';
 import { ProcurementDashboard } from './components/ProcurementDashboard';
 import { LanguageProvider, useTranslation, Language } from './utils/i18n';
-import { loadSharedState, saveSharedState } from './utils/sharedStorage';
+import { loadSharedState, saveSharedState, type SaveStatus } from './utils/sharedStorage';
 import { useWeb3 } from './utils/useWeb3';
+import { getRoleSyncOverride, setRoleSyncOverride } from './utils/web3Provider';
+import { isAuthorizedDirector } from './utils/committeeVerification';
 
 
 type UserRole = 'citizen' | 'supplier' | 'government' | 'auditor' | 'oversight';
@@ -80,6 +82,29 @@ function AppContent() {
   const [reports, setReports] = useState<any[]>([]);
   const [reputationScores, setReputationScores] = useState<any[]>([]);
   const [registeredSuppliers, setRegisteredSuppliers] = useState<any[]>([]);
+  // Art. 3(18)/3(19)/23(1)-(2): a tender's Evaluation Committee (3 named
+  // members, one per department) must be proposed by a Procurement Official
+  // and approved by a Minister/Director before evaluation can start — this
+  // replaces the single "Procuring Entity" user doing everything alone.
+  const [evaluationCommittees, setEvaluationCommittees] = useState<any[]>([]);
+  // Per-member, per-bid attestations (bank statement / other documents) —
+  // individually attributed so no single member's sign-off is anonymous.
+  const [committeeAttestations, setCommitteeAttestations] = useState<any[]>([]);
+  // Which of the 4 evaluation stages each tender is on, and each
+  // committee member's own recorded checklist judgment per bid — these used
+  // to live as local-only state inside PostTenderingPhase, which meant
+  // separate committee members on separate devices could never see each
+  // other's votes or agree on what stage a tender was in. Lifted up here so
+  // they're synced through Firebase like evaluationCommittees above.
+  const [evalStages, setEvalStages] = useState<{ [tenderId: string]: number }>({});
+  const [memberEvalData, setMemberEvalData] = useState<{ [bidId: string]: { [memberName: string]: any } }>({});
+  // Domestic-firm preference flag per bid — an objective fact recorded
+  // once, same sharing requirement as the evaluation votes above.
+  const [domesticFlags, setDomesticFlags] = useState<{ [bidId: string]: { isDomestic: boolean; domesticPreference: number } }>({});
+  // IDs of audit records an Auditor has marked reviewed — shared/persisted
+  // like everything else here, rather than local per-browser state that
+  // vanishes on refresh and is invisible to any other Auditor.
+  const [reviewedRecordIds, setReviewedRecordIds] = useState<string[]>([]);
   const [balance, setBalance] = useState<number>(500);
   const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
   const [showWallet, setShowWallet] = useState(false);
@@ -97,6 +122,12 @@ function AppContent() {
         if (data.reports) setReports(data.reports);
         if (data.reputationScores) setReputationScores(data.reputationScores);
         if (data.registeredSuppliers) setRegisteredSuppliers(data.registeredSuppliers);
+        if (data.evaluationCommittees) setEvaluationCommittees(data.evaluationCommittees);
+        if (data.committeeAttestations) setCommitteeAttestations(data.committeeAttestations);
+        if (data.evalStages) setEvalStages(data.evalStages);
+        if (data.memberEvalData) setMemberEvalData(data.memberEvalData);
+        if (data.domesticFlags) setDomesticFlags(data.domesticFlags);
+        if (data.reviewedRecordIds) setReviewedRecordIds(data.reviewedRecordIds);
         if (typeof data.balance === 'number') setBalance(data.balance);
         if (data.walletTransactions) setWalletTransactions(data.walletTransactions);
       }
@@ -104,11 +135,21 @@ function AppContent() {
     });
   }, []);
 
+  // Whether the last change made it to Firebase — previously this save was
+  // pure fire-and-forget, so a committee member checking an evaluation box
+  // had no way to know whether it actually persisted or silently failed
+  // (e.g. a dropped connection). Threaded down to PostTenderingPhase so it
+  // can show real save-confirmation UI next to the evaluation checklist.
+  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
+
   // Save to Firebase on any change (only after initial load)
   useEffect(() => {
     if (!loaded) return;
-    saveSharedState({ tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, balance, walletTransactions });
-  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, balance, walletTransactions, loaded]);
+    saveSharedState(
+      { tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, evaluationCommittees, committeeAttestations, evalStages, memberEvalData, domesticFlags, reviewedRecordIds, balance, walletTransactions },
+      setSaveStatus
+    );
+  }, [tenders, bids, contracts, blockchainRecords, disputes, reports, reputationScores, registeredSuppliers, evaluationCommittees, committeeAttestations, evalStages, memberEvalData, domesticFlags, reviewedRecordIds, balance, walletTransactions, loaded]);
 
   // Centralised token-reward payout for citizen record verification, DAO vote
   // participation, and whistleblower rewards. Keeps every reward flowing
@@ -243,7 +284,12 @@ function AppContent() {
           type: t('search.contract'),
           title: contract.title || contract.vendorName || contract.id,
           subtitle: `${contract.vendorName || ''} • ${contract.status || ''}`,
-          tab: 'post',
+          // The Post-Tendering evaluation screen (committee identities,
+          // their bound wallet addresses, vote controls) is government-only
+          // — searching a contract used to drop ANY role straight into it.
+          // Everyone else lands on the public audit trail instead, which
+          // already shows this same contract/award record.
+          tab: userRole === 'government' ? 'post' : 'audit',
           icon: Briefcase,
         });
       }
@@ -286,27 +332,86 @@ function AppContent() {
 
   const { connected, account, procurementContract, isCorrectNetwork, connect } = useWeb3();
 
-  // Fetch role from smart contract when wallet connects
+  // Fetch role from smart contract whenever the connected wallet or account
+  // changes — switching to a different registered MetaMask account (e.g.
+  // your Supplier vs. Government address) re-syncs the top banner to that
+  // account's real on-chain role, same as connecting for the first time.
+  //
+  // The one exception is a narrow, local wallet check — e.g. the Evaluation
+  // Committee's Minister/Director approval screen, which connects a wallet
+  // just to verify an address against an allowlist, not to navigate the
+  // app. That flow arms a sticky override (see web3Provider.ts) before it
+  // starts; while armed, every account change here lands on the requested
+  // role instead of whatever address happens to be active, and the top
+  // banner's locked state is left untouched so it doesn't flicker as the
+  // right approver address is selected in MetaMask. The flow disarms the
+  // override itself once it concludes (e.g. after a successful approval).
   useEffect(() => {
     if (!connected || !procurementContract || !account || !isCorrectNetwork) {
       setOnChainRole(null);
       return;
     }
+    // The Minister/Director allowlist address is special-cased regardless of
+    // how it became the active account — whether by clicking the committee
+    // screen's "Connect Wallet" button (which arms the override below) or
+    // by picking it directly in the MetaMask extension. Its only purpose in
+    // this app is a narrow approval-address check, so it must never drag
+    // the top banner along with it.
+    if (isAuthorizedDirector(account)) {
+      const override = getRoleSyncOverride() as UserRole | null;
+      if (override) {
+        setUserRole(override);
+        setShowRoleModal(false);
+      }
+      // No override armed: a direct MetaMask switch to this address outside
+      // the committee flow — leave userRole/onChainRole exactly as they are.
+      return;
+    }
+    // Any account other than the Director's own address means we are not
+    // (or no longer) in the middle of that narrow approval check — clear
+    // any override here unconditionally. Without this, an override armed
+    // by clicking "Connect Wallet to verify a distinct approver" but never
+    // resolved (e.g. the approval attempt hit an error and was abandoned)
+    // would stay armed forever and silently hijack every future account
+    // switch — including switching to a totally unrelated role like
+    // Auditor — onto whatever role the committee flow last requested.
+    setRoleSyncOverride(null);
     (async () => {
       try {
         const roleNum = await procurementContract.getRole(account);
         const role = ROLE_MAP[Number(roleNum)];
-        if (role) {
+        // Citizen is the universal floor — every registered wallet has at
+        // least it, and the app already treats it as "always accessible"
+        // regardless of role (see the comment on isDisabled below). So a
+        // wallet that happens to be registered as nothing more than
+        // Citizen (e.g. from unrelated earlier testing) must NOT force a
+        // switch away from whatever more specific role/screen is already
+        // active — that's exactly what silently kicked a committee member
+        // back out to the Public dashboard mid-evaluation, just because
+        // their address had once self-registered as Citizen. Only a real,
+        // more-specific on-chain role (Supplier/Government/Auditor/
+        // Oversight) should force this switch; Citizen still applies
+        // normally when nothing more specific was already active.
+        if (role && (role !== 'citizen' || userRole === 'citizen')) {
           setOnChainRole(role);
           setUserRole(role);
           setShowRoleModal(false);
-        } else {
+          // A wallet switch can land on a role whose tab set doesn't
+          // include whatever screen was open a moment ago (e.g. Government
+          // viewing Pre-Tender, then MetaMask switches to a Supplier
+          // wallet) — the manual role-switcher already resets to that
+          // role's first tab; this auto-sync path needs the same guard so
+          // a now-disallowed screen doesn't keep rendering silently.
+          setActivePhase((prev) => (roleTabs[role].includes(prev) ? prev : roleFirstTab[role]));
+        } else if (!role) {
           setOnChainRole(null);
           setShowRoleModal(true);
         }
       } catch {
+        // Only the on-chain role lookup failed (network hiccup, RPC error,
+        // etc.) — that's not a reason to forcibly navigate the user away
+        // from whatever they were doing.
         setOnChainRole(null);
-        setUserRole('citizen');
       }
     })();
   }, [connected, account, procurementContract, isCorrectNetwork]);
@@ -451,6 +556,11 @@ function AppContent() {
                     key={role}
                     onClick={() => {
                       if (isDisabled) return;
+                      // A direct, manual tab click always wins — clear any
+                      // leftover local-check override (e.g. an abandoned
+                      // Minister/Director verification) so it can't block
+                      // future account-switch syncing.
+                      setRoleSyncOverride(null);
                       setUserRole(role);
                       setActivePhase(roleFirstTab[role]);
                     }}
@@ -740,6 +850,44 @@ function AppContent() {
         </span>
       </div>
 
+      {/* Non-blocking registration banner — replaces what used to be a
+          full-screen modal with no dismiss option. Registration changes
+          real on-chain permissions, so it stays a deliberate action (never
+          automatic), but it no longer stops you from using the app with
+          an unregistered wallet in the meantime. */}
+      {showRoleModal && connected && (
+        <div style={{
+          background: '#fffbeb', borderBottom: '1px solid #fde68a',
+          padding: '9px 22px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: 12.5, color: '#78350f', fontWeight: 600 }}>
+            This wallet isn't registered yet — {t('role.registerDesc')}
+          </span>
+          <button
+            onClick={() => handleRegisterRole(1)}
+            disabled={roleLoading}
+            style={{ fontSize: 12, fontWeight: 700, color: '#0f2942', background: '#fff', border: '1px solid #fcd34d', borderRadius: 999, padding: '3px 11px', cursor: roleLoading ? 'not-allowed' : 'pointer' }}
+          >
+            Register as {t('role.citizen')}
+          </button>
+          <button
+            onClick={() => handleRegisterRole(2)}
+            disabled={roleLoading}
+            style={{ fontSize: 12, fontWeight: 700, color: '#0f2942', background: '#fff', border: '1px solid #fcd34d', borderRadius: 999, padding: '3px 11px', cursor: roleLoading ? 'not-allowed' : 'pointer' }}
+          >
+            Register as {t('role.supplier')}
+          </button>
+          {roleLoading && <span style={{ fontSize: 11.5, color: '#c99a3c', fontWeight: 600 }}>{t('role.registering')}</span>}
+          <button
+            onClick={() => setShowRoleModal(false)}
+            title="Dismiss — this wallet stays unregistered (None) on-chain"
+            style={{ background: 'none', border: 'none', fontSize: 16, lineHeight: 1, color: '#92400e', cursor: 'pointer', padding: '2px 4px' }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Main Content */}
       <main id="main-content" className="max-w-7xl mx-auto px-4 py-8">
         {activePhase === 'dashboard' && (
@@ -781,10 +929,11 @@ function AppContent() {
             registeredSuppliers={registeredSuppliers}
           />
         )}
-        {activePhase === 'post' && (
+        {activePhase === 'post' && userRole === 'government' && (
           <PostTenderingPhase
             tenders={tenders}
             bids={bids}
+            setBids={setBids}
             contracts={contracts}
             setContracts={setContracts}
             setTenders={setTenders}
@@ -797,6 +946,19 @@ function AppContent() {
             disputes={disputes}
             setDisputes={setDisputes}
             userRole={userRole}
+            setUserRole={setUserRole}
+            registeredSuppliers={registeredSuppliers}
+            evaluationCommittees={evaluationCommittees}
+            setEvaluationCommittees={setEvaluationCommittees}
+            committeeAttestations={committeeAttestations}
+            setCommitteeAttestations={setCommitteeAttestations}
+            evalStages={evalStages}
+            setEvalStages={setEvalStages}
+            memberEvalData={memberEvalData}
+            setMemberEvalData={setMemberEvalData}
+            domesticFlags={domesticFlags}
+            setDomesticFlags={setDomesticFlags}
+            saveStatus={saveStatus}
           />
         )}
         {activePhase === 'audit' && (
@@ -808,6 +970,8 @@ function AppContent() {
             userRole={userRole}
             disputes={disputes}
             reports={reports}
+            reviewedRecordIds={reviewedRecordIds}
+            setReviewedRecordIds={setReviewedRecordIds}
             onAwardTokens={awardTokens}
           />
         )}
@@ -865,6 +1029,7 @@ function AppContent() {
             userRole={userRole}
             registeredSuppliers={registeredSuppliers}
             setRegisteredSuppliers={setRegisteredSuppliers}
+            tenders={tenders}
           />
         )}
         {activePhase === 'submitBid' && (
@@ -900,36 +1065,6 @@ function AppContent() {
           <HelpSupport />
         )}
       </main>
-
-      {/* Role Registration Modal */}
-      {showRoleModal && connected && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.5)' }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
-            <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: '#0f2942' }}>{t('role.registerTitle')}</h2>
-            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#6b7280' }}>{t('role.registerDesc')}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <button
-                onClick={() => handleRegisterRole(1)}
-                disabled={roleLoading}
-                style={{ padding: '14px 20px', borderRadius: 10, border: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', textAlign: 'left' }}
-              >
-                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f2942' }}>{t('role.citizen')}</div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('role.citizenDesc')}</div>
-              </button>
-              <button
-                onClick={() => handleRegisterRole(2)}
-                disabled={roleLoading}
-                style={{ padding: '14px 20px', borderRadius: 10, border: '2px solid #e5e7eb', background: '#f9fafb', cursor: 'pointer', textAlign: 'left' }}
-              >
-                <div style={{ fontWeight: 700, fontSize: 15, color: '#0f2942' }}>{t('role.supplier')}</div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{t('role.supplierDesc')}</div>
-              </button>
-            </div>
-            {roleLoading && <p style={{ marginTop: 16, fontSize: 13, color: '#c99a3c', fontWeight: 600 }}>{t('role.registering')}</p>}
-            <p style={{ marginTop: 16, fontSize: 12, color: '#9ca3af' }}>{t('role.privilegedNote')}</p>
-          </div>
-        </div>
-      )}
 
       {/* Simulated Token Wallet */}
       {showWallet && createPortal(

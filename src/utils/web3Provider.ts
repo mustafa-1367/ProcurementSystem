@@ -54,6 +54,29 @@ export function getWeb3State(): Web3State {
   return currentState;
 }
 
+// Connecting/switching a wallet usually means "I want to navigate the app
+// as my verified on-chain role" — that's what the app's role-sync effect
+// assumes, and it re-syncs on every account change so operating the app as
+// a different registered wallet (e.g. swapping to your Supplier address)
+// works the way it always has. But some actions connect a wallet for a
+// narrow, local purpose (e.g. verifying a Minister/Director approval
+// address against an allowlist) without wanting *any* account switching
+// that happens during that check — including picking the right address in
+// MetaMask itself — to also drag the top-level role/tab along with it.
+// A caller arms this override right before connecting; unlike a one-shot
+// flag, it stays armed across subsequent account changes so the whole
+// local-check flow is protected, not just its first connect. The caller
+// is responsible for disarming it (pass null) once the flow concludes.
+let roleSyncOverride: string | null = null;
+
+export function setRoleSyncOverride(role: string | null) {
+  roleSyncOverride = role;
+}
+
+export function getRoleSyncOverride(): string | null {
+  return roleSyncOverride;
+}
+
 function getMetaMaskProvider(): any {
   if (typeof window !== 'undefined' && (window as any).ethereum) {
     return (window as any).ethereum;
@@ -140,6 +163,8 @@ export function disconnectWallet() {
     ethereum.removeListener('accountsChanged', handleAccountsChanged);
   }
   currentState = { ...initialState };
+  // A full disconnect ends any in-progress local wallet check too.
+  roleSyncOverride = null;
   notifyListeners();
 }
 

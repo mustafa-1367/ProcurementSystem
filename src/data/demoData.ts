@@ -76,6 +76,26 @@ const CNT = {
   itInfra: 'CNT-DEMO-002',
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  MOCK BANK GUARANTEE REGISTRY (Art. 28(1)(a) bid security)
+//
+//  No real Afghan bank publishes a queryable guarantee registry today, so
+//  this simulates the trusted source a human would otherwise have to phone
+//  the issuing bank to confirm — same honesty pattern as the mocked AISA
+//  business-license lookup already used for registration. Deliberately
+//  includes one expired reference so the demo can show a failed auto-check,
+//  not just the happy path. A company with no entry here simply has no bid
+//  security on file — also a legitimate, visible outcome, not an error.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const mockBankGuarantees = [
+  { companyName: 'Afghan Star Construction Co.', bank: 'Da Afghanistan Bank', referenceNumber: 'BG-2025-00118', amount: 14000000, expiryDate: '2027-06-30' },
+  { companyName: 'Nangarhar Farm Equipment Ltd.', bank: 'Azizi Bank', referenceNumber: 'BG-2026-00077', amount: 2200000, expiryDate: '2026-12-31' },
+  { companyName: 'Takhar Test Traders', bank: 'Afghanistan International Bank', referenceNumber: 'BG-2026-00142', amount: 500000, expiryDate: '2027-03-01' },
+  { companyName: 'Mubariz Tech', bank: 'Ghazanfar Bank', referenceNumber: 'BG-2026-00156', amount: 500000, expiryDate: '2027-03-01' },
+  { companyName: 'Mustafa Technology LTD', bank: 'Da Afghanistan Bank', referenceNumber: 'BG-2024-00039', amount: 500000, expiryDate: '2025-01-01' }, // expired — demonstrates a failed auto-check
+];
+
 export function generateDemoData() {
   // ═══════════════════════════════════════════════════════════════════════════
   //  REGISTERED SUPPLIERS

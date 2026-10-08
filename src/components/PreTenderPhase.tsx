@@ -22,6 +22,7 @@ interface PreTenderPhaseProps {
 export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, blockchainRecords, registeredSuppliers }: PreTenderPhaseProps) {
   const { connected, connect } = useWeb3();
   const [confirmation, setConfirmation] = useState<{ onChain: boolean; hash: string; tenderTitle: string; action: 'created' | 'published' } | null>(null);
+  const [publishingTenderId, setPublishingTenderId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [fundConfirmed, setFundConfirmed] = useState(false);
@@ -111,6 +112,18 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
   };
 
   const RFQ_THRESHOLD_AFN = 500000;
+  // Budget is stored and displayed with thousands separators (consistent
+  // with how tender.budget is already treated everywhere downstream — see
+  // the parseBudget() helper duplicated in TenderingPhase/SubmitBid/
+  // PublicAuditDashboard, which all strip commas before doing math).
+  // formatThousands re-derives the display string from digits only on every
+  // keystroke, so pasting or backspacing mid-number still produces a valid
+  // grouped number instead of a stuck or malformed one.
+  const parseBudget = (v: string) => Number(String(v).replace(/,/g, ''));
+  const formatThousands = (v: string) => {
+    const digits = v.replace(/[^\d]/g, '');
+    return digits ? Number(digits).toLocaleString('en-US') : '';
+  };
 
   const handleSelectMethod = () => {
     if (methodData.method === 'Single-Source' && !methodData.singleSourceJustification) return;
@@ -119,7 +132,7 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
     if (methodData.method === 'Restricted Bidding' && getInvitedBidders().length === 0) return;
     // Procurement Procedures Rule 19(1): RFQ only usable when estimated value does not
     // exceed the Art. 63/NPA-set threshold (500,000 AFN).
-    if (methodData.method === 'Request for Quotations' && Number(fundData.estimatedValue) > RFQ_THRESHOLD_AFN) return;
+    if (methodData.method === 'Request for Quotations' && parseBudget(fundData.estimatedValue) > RFQ_THRESHOLD_AFN) return;
     setMethodSelected(true);
     setCurrentStep(3);
   };
@@ -171,57 +184,90 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
       verified: onChain, simulated: !onChain, onChain,
     };
 
-    setTenders([...tenders, newTender]);
+    // Persist the real on-chain tender ID onto the tender record itself —
+    // not just blockchain.ts's in-memory cache — so Publish and every bid
+    // committed against this tender can address the real on-chain record
+    // directly instead of guessing or silently recreating it later.
+    const onChainTenderId = (contract?.data as any)?.onChainTenderId as string | undefined;
+    setTenders([...tenders, onChain && onChainTenderId ? { ...newTender, onChainTenderId } : newTender]);
     setBlockchainRecords([...blockchainRecords, blockchainRecord]);
     setConfirmation({ onChain, hash: contract.transactionHash, tenderTitle: newTender.title, action: 'created' });
     resetCreateFlow();
   };
 
   const publishTender = async (tenderId: string) => {
-    const tender = tenders.find((td) => td.id === tenderId);
+    // Re-entrancy guard — this whole function is async (invitation emails
+    // are sent over the network before the tender's status ever flips to
+    // 'published', which is the only thing that would normally make the
+    // Publish button disappear). Without this, a few clicks while it's
+    // still in flight re-runs the entire invitation batch each time —
+    // exactly how a Restricted Bidding invitee ended up with 3 copies of
+    // the same invitation email for one publish.
+    if (publishingTenderId) return;
+    setPublishingTenderId(tenderId);
+    try {
+      const tender = tenders.find((td) => td.id === tenderId);
 
-    // Art. 3(9): send the actual invitation to each invited bidder once the
-    // Restricted Bidding tender goes live — not just a passive listing.
-    let invitationResults: { name: string; status: string; error?: string }[] = [];
-    if (tender.method === 'Restricted Bidding' && Array.isArray(tender.invitedBidders)) {
-      invitationResults = await Promise.all(
-        tender.invitedBidders.map(async (invitee: InvitedBidder) => {
-          const result = await sendInvitationEmail({
-            vendorEmail: invitee.email,
-            vendorName: invitee.name,
-            tenderTitle: tender.title,
-            deadline: tender.deadline,
-          });
-          return { name: invitee.name, status: result.status, error: (result as any).error };
-        })
+      // Art. 3(9): send the actual invitation to each invited bidder once the
+      // Restricted Bidding tender goes live — not just a passive listing.
+      let invitationResults: { name: string; status: string; error?: string }[] = [];
+      if (tender.method === 'Restricted Bidding' && Array.isArray(tender.invitedBidders)) {
+        invitationResults = await Promise.all(
+          tender.invitedBidders.map(async (invitee: InvitedBidder) => {
+            const result = await sendInvitationEmail({
+              vendorEmail: invitee.email,
+              vendorName: invitee.name,
+              tenderTitle: tender.title,
+              deadline: tender.deadline,
+            });
+            return { name: invitee.name, status: result.status, error: (result as any).error };
+          })
+        );
+      }
+
+      const updatedTenders = tenders.map((td) =>
+        td.id === tenderId
+          ? { ...td, status: 'published', publishedAt: new Date().toISOString(), invitationEmailResults: invitationResults.length ? invitationResults : undefined }
+          : td
       );
+
+      const { block, contract, onChain } = await addProcurementRecordAsync('tender', {
+        action: 'publish',
+        tenderId,
+        title: tender.title,
+        budget: tender.budget,
+        deadline: tender.deadline,
+        // Pass through whatever was already persisted at creation time —
+        // onChainPublishTender prefers this over its own in-memory cache,
+        // so publishing still addresses the right on-chain tender after a
+        // reload. If this tender was created without a wallet connected
+        // (so there's nothing to pass), onChainPublishTender creates it
+        // for real right now instead of leaving that cost for the first
+        // bidder to silently inherit.
+        onChainTenderId: tender.onChainTenderId,
+      });
+
+      const blockchainRecord = {
+        id: block.hash,
+        type: 'tender_published',
+        tenderId,
+        contractId: contract.id,
+        transactionHash: contract.transactionHash,
+        timestamp: new Date().toISOString(),
+        verified: onChain, simulated: !onChain, onChain,
+      };
+
+      // Capture the on-chain ID whether it was already known or had to be
+      // created just now by onChainPublishTender's own fallback.
+      const publishedOnChainTenderId = (contract?.data as any)?.onChainTenderId as string | undefined;
+      setTenders(onChain && publishedOnChainTenderId
+        ? updatedTenders.map((td) => (td.id === tenderId ? { ...td, onChainTenderId: publishedOnChainTenderId } : td))
+        : updatedTenders);
+      setBlockchainRecords([...blockchainRecords, blockchainRecord]);
+      setConfirmation({ onChain, hash: contract.transactionHash, tenderTitle: tender.title, action: 'published' });
+    } finally {
+      setPublishingTenderId(null);
     }
-
-    const updatedTenders = tenders.map((td) =>
-      td.id === tenderId
-        ? { ...td, status: 'published', publishedAt: new Date().toISOString(), invitationEmailResults: invitationResults.length ? invitationResults : undefined }
-        : td
-    );
-
-    const { block, contract, onChain } = await addProcurementRecordAsync('tender', {
-      action: 'publish',
-      tenderId,
-      title: tender.title,
-    });
-
-    const blockchainRecord = {
-      id: block.hash,
-      type: 'tender_published',
-      tenderId,
-      contractId: contract.id,
-      transactionHash: contract.transactionHash,
-      timestamp: new Date().toISOString(),
-      verified: onChain, simulated: !onChain, onChain,
-    };
-
-    setTenders(updatedTenders);
-    setBlockchainRecords([...blockchainRecords, blockchainRecord]);
-    setConfirmation({ onChain, hash: contract.transactionHash, tenderTitle: tender.title, action: 'published' });
   };
 
   const categories = [
@@ -416,8 +462,9 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                 <label style={labelStyle}>{t('preTender.estimatedValue')}</label>
                 <input
                   value={fundData.estimatedValue}
-                  onChange={(e) => setFundData({ ...fundData, estimatedValue: e.target.value })}
+                  onChange={(e) => setFundData({ ...fundData, estimatedValue: formatThousands(e.target.value) })}
                   placeholder={t('preTender.estimatedValuePlaceholder')}
+                  inputMode="numeric"
                   disabled={fundConfirmed}
                   style={{ ...inputStyle, background: fundConfirmed ? '#f6f5f2' : '#fff' }}
                 />
@@ -442,9 +489,26 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                   {t('preTender.confirmFund')}
                 </button>
               ) : (
-                <span style={confirmedBadge}>
-                  <CheckCircle style={{ width: 14, height: 14 }} /> {t('preTender.fundConfirmed')}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={confirmedBadge}>
+                    <CheckCircle style={{ width: 14, height: 14 }} /> {t('preTender.fundConfirmed')}
+                  </span>
+                  {/* Without this, confirming the fund estimate then
+                      discovering the chosen method can't actually be
+                      selected with that amount (e.g. RFQ's 500,000 AFN cap,
+                      Rule 19(1)) was a dead end — the amount field was
+                      locked with no way back, and the only reset button
+                      lived in Step 3, which is unreachable until a method
+                      is confirmed. Unconfirming just unlocks the two
+                      fields again; nothing else about the draft is lost. */}
+                  <button
+                    type="button"
+                    onClick={() => setFundConfirmed(false)}
+                    style={{ fontSize: '12px', fontWeight: 600, color: '#1c5cab', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                  >
+                    ← Edit amount
+                  </button>
+                </div>
               )}
               <div style={hintStyle}>{t('preTender.fundHint')}</div>
             </div>
@@ -536,9 +600,9 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
               )}
               {methodData.method === 'Request for Quotations' && !methodSelected && (
                 <div style={{ marginBottom: 13 }}>
-                  {Number(fundData.estimatedValue) > RFQ_THRESHOLD_AFN ? (
+                  {parseBudget(fundData.estimatedValue) > RFQ_THRESHOLD_AFN ? (
                     <div style={{ fontSize: '12.5px', color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px' }}>
-                      Estimated value ({Number(fundData.estimatedValue).toLocaleString()} AFN) exceeds the RFQ threshold of {RFQ_THRESHOLD_AFN.toLocaleString()} AFN — Procurement Procedures Rule 19(1) / Art. 63. Use Open Bidding or another method instead.
+                      Estimated value ({parseBudget(fundData.estimatedValue).toLocaleString()} AFN) exceeds the RFQ threshold of {RFQ_THRESHOLD_AFN.toLocaleString()} AFN — Procurement Procedures Rule 19(1) / Art. 63. Use Open Bidding or another method instead.
                     </div>
                   ) : (
                     <div style={hintStyle}>Rule 19(1): usable only up to {RFQ_THRESHOLD_AFN.toLocaleString()} AFN. Rule 19(4): requires quotations from at least 3 sources before award.</div>
@@ -765,12 +829,17 @@ export function PreTenderPhase({ tenders, setTenders, setBlockchainRecords, bloc
                     {tender.status === 'draft' && (
                       <button
                         onClick={() => publishTender(tender.id)}
-                        style={{ ...btnPrimary, padding: '6px 11px', fontSize: '12px' }}
-                        onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#173d61'; }}
+                        disabled={publishingTenderId === tender.id}
+                        style={{
+                          ...btnPrimary, padding: '6px 11px', fontSize: '12px',
+                          opacity: publishingTenderId === tender.id ? 0.6 : 1,
+                          cursor: publishingTenderId === tender.id ? 'not-allowed' : 'pointer',
+                        }}
+                        onMouseEnter={(e) => { if (publishingTenderId !== tender.id) (e.target as HTMLElement).style.background = '#173d61'; }}
                         onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#0f2942'; }}
                       >
                         <Upload style={{ width: 14, height: 14 }} />
-                        {t('preTender.publish')}
+                        {publishingTenderId === tender.id ? 'Publishing…' : t('preTender.publish')}
                       </button>
                     )}
                   </td>

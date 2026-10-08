@@ -9,6 +9,20 @@ interface DashboardChartsProps {
 
 const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316'];
 
+// Fixed per-status colors for the Tender Status pie — matching the colors
+// these same statuses already use elsewhere (e.g. the awarded/standstill
+// contract badge in PostTenderingPhase). Without this, slices picked up
+// COLORS[i] by insertion order into statusCounts below, which depends on
+// where each status first appears while looping the tenders array — the
+// same status could render a different color on every reload as tender
+// order shifted, with no actual meaning behind which color it got.
+const STATUS_COLORS: Record<string, string> = {
+  draft: '#9ca3af',
+  published: '#3b82f6',
+  standstill: '#f59e0b',
+  awarded: '#22c55e',
+};
+
 export function DashboardCharts({ tenders, bids, contracts, blockchainRecords }: DashboardChartsProps) {
   // Tender status distribution
   const statusCounts: Record<string, number> = {};
@@ -73,9 +87,22 @@ export function DashboardCharts({ tenders, bids, contracts, blockchainRecords }:
       <div style={cardStyle}>
         <h3 style={titleStyle}>Tender Status</h3>
         <ResponsiveContainer width="100%" height={220}>
-          <PieChart>
-            <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name} (${value})`}>
-              {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+          {/* Labels sit outside outerRadius, but the chart had no margin —
+              the topmost slice's label had nowhere to go but past the SVG's
+              own boundary, which clips it (half the text reading as cut off
+              by the card's white background). Margin gives labels room on
+              every side; outerRadius trimmed slightly to match. */}
+          <PieChart margin={{ top: 20, right: 30, bottom: 20, left: 30 }}>
+            <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name} (${value})`}>
+              {statusData.map(({ name }) => {
+                // Any status not in the fixed map (shouldn't normally
+                // happen) still gets a deterministic color derived from
+                // its own name, not from array position — so it's at
+                // least stable across reloads instead of reintroducing
+                // the same order-dependent bug as a "fallback."
+                const fallback = COLORS[[...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % COLORS.length];
+                return <Cell key={name} fill={STATUS_COLORS[name] || fallback} />;
+              })}
             </Pie>
             <Tooltip />
           </PieChart>

@@ -3,6 +3,7 @@ import { Eye, Search, Download, TrendingUp, Banknote, FileText, BarChart3, PieCh
 import { useTranslation } from '../utils/i18n';
 import { generateAuditPDF } from '../utils/pdfExport';
 import { TxHashLink } from './TxHashLink';
+import { verifyRevealedBid } from '../utils/commitReveal';
 
 interface PublicAuditDashboardProps {
   tenders: any[];
@@ -12,17 +13,22 @@ interface PublicAuditDashboardProps {
   userRole: string;
   disputes?: any[];
   reports?: any[];
+  // IDs of audit records an Auditor has marked reviewed — lifted to
+  // App.tsx and Firebase-persisted (like `reports` above) so a review
+  // survives a refresh and is visible to every Auditor, not just whoever
+  // clicked it in their own browser.
+  reviewedRecordIds?: string[];
+  setReviewedRecordIds?: (ids: string[]) => void;
   onAwardTokens?: (amount: number, type: string, label: string, meta?: Record<string, unknown>) => void;
 }
 
 const CITIZEN_VERIFY_REWARD = 10;
 
-export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole, disputes = [], reports = [], onAwardTokens }: PublicAuditDashboardProps) {
+export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecords, userRole, disputes = [], reports = [], reviewedRecordIds = [], setReviewedRecordIds, onAwardTokens }: PublicAuditDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [auditFilter, setAuditFilter] = useState('all');
-  const [reviewedRecords, setReviewedRecords] = useState<Set<string>>(new Set());
   const [citizenVerifiedRecords, setCitizenVerifiedRecords] = useState<Set<string>>(new Set());
   const { t } = useTranslation();
 
@@ -423,9 +429,21 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                     {tenderContract && tenderContract.vendorName === bid.vendorName && (
                                       <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 999, color: '#0a6b0a', background: '#d1fae5', border: '1px solid #bbf7d0' }}>Winner</span>
                                     )}
+                                    {(() => {
+                                      const revealVerified = verifyRevealedBid(bid);
+                                      if (revealVerified === null) return null;
+                                      return (
+                                        <span
+                                          style={{ fontSize: 10, fontWeight: 700, color: revealVerified ? '#0a6b0a' : '#b91c1c' }}
+                                          title={revealVerified ? 'Anyone can recompute keccak256(amount, salt) from the published reveal and check it matches the committed hash' : 'Revealed value does not match the original commitment'}
+                                        >
+                                          {revealVerified ? '✓ Verified' : '✗ Failed check'}
+                                        </span>
+                                      );
+                                    })()}
                                   </span>
-                                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: '#0b0b0b' }}>
-                                    {Number(bid.amount).toLocaleString()} {t('audit.afn')}
+                                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: bid.amount ? '#0b0b0b' : '#b45309' }}>
+                                    {bid.amount ? `${Number(bid.amount).toLocaleString()} ${t('audit.afn')}` : 'Not yet revealed'}
                                   </span>
                                 </div>
                               ))}
@@ -588,9 +606,9 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {userRole === 'auditor' && reviewedRecords.size > 0 && (
+                  {userRole === 'auditor' && reviewedRecordIds.length > 0 && (
                     <span style={{ background: '#dcfce7', color: '#0a6b0a', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 999, border: '1px solid #bbf7d0' }}>
-                      {reviewedRecords.size} {t('audit.reviewed')}
+                      {reviewedRecordIds.length} {t('audit.reviewed')}
                     </span>
                   )}
                   <span style={{ background: 'linear-gradient(135deg, #1e3a5f, #2d5a8e)', color: '#fff', fontSize: 13, fontWeight: 700, padding: '5px 14px', borderRadius: 999 }}>
@@ -749,7 +767,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                       ● On-Chain
                                     </span>
                                   )}
-                                  {userRole === 'auditor' && reviewedRecords.has(record.id) && (
+                                  {userRole === 'auditor' && reviewedRecordIds.includes(record.id) && (
                                     <span style={{
                                       display: 'inline-flex', alignItems: 'center', gap: 4,
                                       fontSize: 11, fontWeight: 700, padding: '3px 9px',
@@ -763,9 +781,9 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                               )}
                               {userRole === 'auditor' && (
                                 <div style={{ marginTop: 8 }}>
-                                  {reviewedRecords.has(record.id) ? (
+                                  {reviewedRecordIds.includes(record.id) ? (
                                     <button
-                                      onClick={() => setReviewedRecords((prev) => { const next = new Set(prev); next.delete(record.id); return next; })}
+                                      onClick={() => setReviewedRecordIds?.(reviewedRecordIds.filter((id) => id !== record.id))}
                                       style={{
                                         fontSize: 11, fontWeight: 600, padding: '4px 12px',
                                         borderRadius: 6, border: '1px solid #e1e0d9', background: '#f8f8f6',
@@ -776,7 +794,7 @@ export function PublicAuditDashboard({ tenders, bids, contracts, blockchainRecor
                                     </button>
                                   ) : (
                                     <button
-                                      onClick={() => setReviewedRecords((prev) => new Set(prev).add(record.id))}
+                                      onClick={() => setReviewedRecordIds?.([...reviewedRecordIds, record.id])}
                                       style={{
                                         fontSize: 11, fontWeight: 600, padding: '4px 12px',
                                         borderRadius: 6, border: '1px solid #3b82f6', background: '#eff6ff',

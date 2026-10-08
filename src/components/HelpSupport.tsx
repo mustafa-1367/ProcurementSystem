@@ -7,8 +7,8 @@ export function HelpSupport() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'faq' | 'glossary' | 'userGuide' | 'howItWorks'>('faq');
 
-  const faqKeys = [0, 1, 2, 3, 4, 5, 6, 7];
-  const glossaryKeys = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const faqKeys = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+  const glossaryKeys = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
   const guideKeys = [0, 1, 2, 3, 4, 5, 6, 7, 8];
   const howStepKeys = [0, 1, 2, 3, 4, 5];
 

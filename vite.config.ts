@@ -55,6 +55,12 @@
     build: {
       target: 'esnext',
       outDir: 'build',
+      // esbuild's minifier hits a parser edge case on this bundle's size/
+      // shape (reproducible, unrelated to any specific app code change —
+      // disabling minification entirely also avoids it, which rules out a
+      // real syntax/semantic bug in the source). Terser is slower but
+      // doesn't hit it.
+      minify: 'terser',
     },
     server: {
       port: 3000,

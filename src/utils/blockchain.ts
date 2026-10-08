@@ -14,7 +14,7 @@ export interface Block {
   nonce: number;
 }
 
-export type ContractType = 'tender' | 'bid' | 'award' | 'payment' | 'dispute' | 'dao_resolution' | 'whistleblower_report' | 'whistleblower_referral' | 'dispute_complaint' | 'evaluation_rereview' | 'objection' | 'supplier_registration' | 'bid_submission';
+export type ContractType = 'tender' | 'bid' | 'award' | 'payment' | 'dispute' | 'dao_resolution' | 'whistleblower_report' | 'whistleblower_referral' | 'dispute_complaint' | 'evaluation_rereview' | 'objection' | 'supplier_registration' | 'bid_submission' | 'bid_reveal' | 'committee_propose' | 'committee_approve' | 'committee_vote';
 
 export interface SmartContract {
   id: string;
@@ -42,7 +42,7 @@ const onChainTenderIdCache: Record<string, string> = {};
 async function onChainTender(
   procContract: Contract,
   data: Record<string, unknown>
-): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string }> {
   const title = String(data.title || '');
   const budget = BigInt(Number(String(data.budget).replace(/,/g, '')) || 0);
   const deadline = BigInt(Math.floor(new Date(String(data.deadline)).getTime() / 1000));
@@ -53,94 +53,270 @@ async function onChainTender(
   const event = receipt.logs?.find((log: any) => {
     try { return procContract.interface.parseLog(log)?.name === 'TenderCreated'; } catch { return false; }
   });
+  let onChainTenderId: string | undefined;
   if (event && data.localTenderId) {
-    const onChainId = procContract.interface.parseLog(event)?.args?.[0];
-    if (onChainId) {
-      onChainTenderIdCache[data.localTenderId as string] = onChainId;
+    onChainTenderId = procContract.interface.parseLog(event)?.args?.[0];
+    if (onChainTenderId) {
+      onChainTenderIdCache[data.localTenderId as string] = onChainTenderId;
       console.log('[Blockchain] Cached on-chain tender ID for', data.localTenderId);
     }
   }
 
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId };
 }
 
 async function onChainPublishTender(
   procContract: Contract,
   data: Record<string, unknown>
-): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
-  // Use cached on-chain ID if available, otherwise fall back to keccak hash
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string }> {
   const localId = data.tenderId as string;
-  const tenderId = onChainTenderIdCache[localId] || keccak256(localId);
-  const tx = await procContract.publishTender(tenderId);
+  // Prefer whatever the caller already has persisted on the tender record
+  // itself (survives reloads) before falling back to this session's own
+  // cache, same pattern as every other on-chain call in this app.
+  let onChainTenderId = (data.onChainTenderId as string) || onChainTenderIdCache[localId];
+
+  if (!onChainTenderId) {
+    // This tender was never actually created on-chain (most likely it was
+    // created while no wallet was connected). Create it for real now,
+    // using its actual title/budget/deadline — this is the Procuring
+    // Entity's own Publish click paying for that one-time cost, instead of
+    // leaving it to silently land on whichever bidder commits first (which
+    // used to mean the first bid needed 3 separate MetaMask confirmations
+    // — create, publish, commit — while every bid after it only needed 1).
+    console.log('[Blockchain] Tender was never created on-chain — creating it now before publishing...');
+    const title = String(data.title || '');
+    const budget = BigInt(Number(String(data.budget).replace(/,/g, '')) || 0);
+    const deadlineMs = new Date(String(data.deadline)).getTime();
+    const deadline = BigInt(Number.isFinite(deadlineMs) && deadlineMs > 0 ? Math.floor(deadlineMs / 1000) : Math.floor(Date.now() / 1000) + 86400 * 30);
+    const createTx = await procContract.createTender(title, budget, deadline);
+    const createReceipt = await createTx.wait();
+    const createdEvent = createReceipt.logs?.find((log: any) => {
+      try { return procContract.interface.parseLog(log)?.name === 'TenderCreated'; } catch { return false; }
+    });
+    onChainTenderId = createdEvent ? procContract.interface.parseLog(createdEvent)?.args?.[0] : keccak256(localId);
+    onChainTenderIdCache[localId] = onChainTenderId as string;
+  }
+
+  const tx = await procContract.publishTender(onChainTenderId);
   const receipt = await tx.wait();
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId };
 }
 
-async function onChainBid(
+// Cache mapping: local bid ID (e.g. "BID-123") -> on-chain bytes32 bidId,
+// captured from the BidCommitted/BidRevealed event at commit time. reveal/
+// vote calls need this to address the exact on-chain bid record.
+const onChainBidIdCache: Record<string, string> = {};
+
+// Lets callers check whether a given local bid actually corresponds to
+// what finalizeAward reports as the on-chain winner — the app's bid
+// objects are identified by company name, not wallet address, so this
+// cache (populated at commit/submitBidDirect time) is the only reliable
+// bridge between the two identity systems for award reconciliation.
+export function getOnChainBidId(localBidId: string): string | undefined {
+  return onChainBidIdCache[localBidId];
+}
+
+// Repairs bids committed before onChainBidId persistence existed: every
+// blockchainRecords entry already stores the original commit transaction's
+// hash, so instead of treating "never captured it the first time" as
+// unrecoverable, re-fetch that exact transaction's receipt from the chain
+// and re-parse its BidCommitted event — the contract assigned the same
+// bytes32 ID back then, it just never made it off this cache and onto the
+// bid record. Read-only; needs no signature.
+export async function recoverOnChainBidIdFromTx(
+  txHash: string
+): Promise<{ onChainTenderId?: string; onChainBidId?: string } | null> {
+  const web3 = getWeb3State();
+  if (!web3.provider || !web3.procurementContract) return null;
+  const receipt = await web3.provider.getTransactionReceipt(txHash);
+  if (!receipt) return null;
+  const event = receipt.logs.find((log) => {
+    try { return web3.procurementContract!.interface.parseLog(log)?.name === 'BidCommitted'; } catch { return false; }
+  });
+  if (!event) return null;
+  const parsed = web3.procurementContract.interface.parseLog(event);
+  const onChainTenderId = parsed?.args?.[0] as string | undefined;
+  const onChainBidId = parsed?.args?.[1] as string | undefined;
+  if (!onChainBidId) return null;
+  return { onChainTenderId, onChainBidId };
+}
+
+// Resolves (and if necessary creates+publishes) the on-chain tender ID for
+// a local tenderId — the same lazy-creation fallback the old onChainBid
+// relied on, now shared by every bid-side call.
+async function resolveOnChainTenderId(
+  procContract: Contract,
+  localTenderId: string,
+  fallbackTitle: string,
+  fallbackBudget: bigint
+): Promise<string> {
+  const cached = onChainTenderIdCache[localTenderId];
+  if (cached) return cached;
+
+  const hashedId = keccak256(localTenderId);
+  const t = await procContract.tenders(hashedId);
+  if (t.published) {
+    onChainTenderIdCache[localTenderId] = hashedId;
+    return hashedId;
+  }
+
+  console.log('[Blockchain] Tender not on-chain yet, creating & publishing first...');
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400 * 30);
+  const createTx = await procContract.createTender(fallbackTitle, fallbackBudget, deadline);
+  const createReceipt = await createTx.wait();
+  const tenderCreatedEvent = createReceipt.logs?.find((log: any) => {
+    try { return procContract.interface.parseLog(log)?.name === 'TenderCreated'; } catch { return false; }
+  });
+  const onChainTenderId = tenderCreatedEvent
+    ? procContract.interface.parseLog(tenderCreatedEvent)?.args?.[0]
+    : hashedId;
+  onChainTenderIdCache[localTenderId] = onChainTenderId;
+
+  const pubTx = await procContract.publishTender(onChainTenderId);
+  await pubTx.wait();
+  return onChainTenderId;
+}
+
+// Commit phase: only the commitment hash goes on-chain, never the amount.
+async function onChainCommitBid(
   procContract: Contract,
   data: Record<string, unknown>
-): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string; onChainBidId?: string }> {
+  const localTenderId = data.tenderId as string;
+  const commitment = data.commitment as string;
+  // Prefer the tender's own persisted on-chain ID (set at publish time) —
+  // a bid should never have to pay for creating/publishing its tender
+  // itself. The lazy create-and-publish fallback below only fires for
+  // older tenders published before this fix existed.
+  const onChainTenderId = (data.onChainTenderId as string) || await resolveOnChainTenderId(procContract, localTenderId, String(data.vendor || localTenderId), 0n);
+
+  const tx = await procContract.commitBid(onChainTenderId, commitment);
+  const receipt = await tx.wait();
+
+  const event = receipt.logs?.find((log: any) => {
+    try { return procContract.interface.parseLog(log)?.name === 'BidCommitted'; } catch { return false; }
+  });
+  let onChainBidId: string | undefined;
+  if (event && data.bidId) {
+    onChainBidId = procContract.interface.parseLog(event)?.args?.[1];
+    // Cache stays as a same-session fast path; the real durability comes
+    // from the caller persisting onChainBidId/onChainTenderId onto the bid
+    // record itself (see resultData merge below) — this cache alone used
+    // to be the ONLY copy, which is why voting silently stopped working
+    // for any bid after a page reload.
+    if (onChainBidId) onChainBidIdCache[data.bidId as string] = onChainBidId;
+  }
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId, onChainBidId };
+}
+
+// Reveal phase: the chain itself recomputes keccak256(amount, salt) and
+// reverts if it doesn't match the stored commitment — only ever called by
+// the bidder after the deadline, same as the app-layer check.
+async function onChainRevealBid(
+  procContract: Contract,
+  data: Record<string, unknown>
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string; onChainBidId?: string }> {
+  const localTenderId = data.tenderId as string;
+  const localBidId = data.bidId as string;
+  // Prefer whatever the caller already has persisted on the record itself
+  // (survives reloads) before falling back to this session's own cache.
+  const onChainTenderId = (data.onChainTenderId as string) || onChainTenderIdCache[localTenderId] || keccak256(localTenderId);
+  const onChainBidId = (data.onChainBidId as string) || onChainBidIdCache[localBidId];
+  if (!onChainBidId) {
+    throw new Error(`No on-chain bid ID known for ${localBidId} — it was never committed on-chain, so it can't be revealed on-chain either.`);
+  }
+  const amount = BigInt(Number(String(data.amount).replace(/,/g, '')) || 0);
+  const salt = data.salt as string;
+
+  const tx = await procContract.revealBid(onChainTenderId, onChainBidId, amount, salt);
+  const receipt = await tx.wait();
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId, onChainBidId };
+}
+
+// Single-Source only (Art. 3(10)) — nothing to seal against with one party.
+async function onChainSubmitBidDirect(
+  procContract: Contract,
+  data: Record<string, unknown>
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string; onChainBidId?: string }> {
   const localTenderId = data.tenderId as string;
   const amount = BigInt(Number(String(data.amount).replace(/,/g, '')) || 0);
+  const onChainTenderId = (data.onChainTenderId as string) || await resolveOnChainTenderId(procContract, localTenderId, String(data.vendor || localTenderId), amount);
 
-  // Check if we already have the on-chain tender ID cached
-  const cachedId = onChainTenderIdCache[localTenderId];
-  if (cachedId) {
-    console.log('[Blockchain] Using cached on-chain tender ID for', localTenderId);
-    const tx = await procContract.submitBid(cachedId, amount);
-    const receipt = await tx.wait();
-    return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+  const tx = await procContract.submitBidDirect(onChainTenderId, amount);
+  const receipt = await tx.wait();
+
+  const event = receipt.logs?.find((log: any) => {
+    try { return procContract.interface.parseLog(log)?.name === 'BidRevealed'; } catch { return false; }
+  });
+  let onChainBidId: string | undefined;
+  if (event && data.bidId) {
+    onChainBidId = procContract.interface.parseLog(event)?.args?.[1];
+    if (onChainBidId) onChainBidIdCache[data.bidId as string] = onChainBidId;
   }
-
-  // No cached ID — try with keccak hash first, then create if needed
-  const hashedId = keccak256(localTenderId);
-  try {
-    const tx = await procContract.submitBid(hashedId, amount);
-    const receipt = await tx.wait();
-    onChainTenderIdCache[localTenderId] = hashedId;
-    return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
-  } catch (bidErr: any) {
-    if (bidErr?.reason === 'Tender not published' || bidErr?.reason === 'Tender does not exist') {
-      console.log('[Blockchain] Tender not on-chain yet, creating & publishing first...');
-      const title = String(data.vendor || localTenderId || '');
-      const budget = BigInt(Number(String(data.amount).replace(/,/g, '')) || 0);
-      const deadline = BigInt(Math.floor(Date.now() / 1000) + 86400 * 30);
-
-      const createTx = await procContract.createTender(title, budget, deadline);
-      const createReceipt = await createTx.wait();
-
-      const tenderCreatedEvent = createReceipt.logs?.find((log: any) => {
-        try { return procContract.interface.parseLog(log)?.name === 'TenderCreated'; } catch { return false; }
-      });
-      const onChainTenderId = tenderCreatedEvent
-        ? procContract.interface.parseLog(tenderCreatedEvent)?.args?.[0]
-        : hashedId;
-
-      // Cache it for future bids
-      onChainTenderIdCache[localTenderId] = onChainTenderId;
-
-      const pubTx = await procContract.publishTender(onChainTenderId);
-      await pubTx.wait();
-
-      const tx = await procContract.submitBid(onChainTenderId, amount);
-      const receipt = await tx.wait();
-      return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
-    }
-    throw bidErr;
-  }
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId, onChainBidId };
 }
 
-async function onChainAward(
+async function onChainProposeCommittee(
   procContract: Contract,
   data: Record<string, unknown>
-): Promise<{ txHash: string; blockNumber: number; blockHash: string }> {
-  const tenderId = keccak256(data.tenderId as string);
-  const bidId = data.bidId as string ? keccak256(data.bidId as string) : '0x' + '0'.repeat(64);
-  const vendor = data.vendor as string || '0x' + '0'.repeat(40);
-  const amount = BigInt(Number(String(data.amount).replace(/,/g, '')) || 0);
-  const tx = await procContract.awardContract(tenderId, bidId, vendor, amount);
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string }> {
+  const onChainTenderId = (data.onChainTenderId as string) || onChainTenderIdCache[data.tenderId as string] || keccak256(data.tenderId as string);
+  const members = data.members as [string, string, string];
+  const tx = await procContract.proposeCommittee(onChainTenderId, members);
   const receipt = await tx.wait();
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId };
+}
+
+async function onChainApproveCommittee(
+  procContract: Contract,
+  data: Record<string, unknown>
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string }> {
+  const onChainTenderId = (data.onChainTenderId as string) || onChainTenderIdCache[data.tenderId as string] || keccak256(data.tenderId as string);
+  const tx = await procContract.approveCommittee(onChainTenderId);
+  const receipt = await tx.wait();
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId };
+}
+
+async function onChainVoteOnBid(
+  procContract: Contract,
+  data: Record<string, unknown>
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainTenderId?: string; onChainBidId?: string }> {
+  const onChainTenderId = (data.onChainTenderId as string) || onChainTenderIdCache[data.tenderId as string] || keccak256(data.tenderId as string);
+  const onChainBidId = (data.onChainBidId as string) || onChainBidIdCache[data.bidId as string];
+  if (!onChainBidId) {
+    throw new Error(`No on-chain bid ID known for ${data.bidId} — it was never committed/revealed on-chain, so there is nothing on-chain to vote on.`);
+  }
+  const tx = await procContract.voteOnBid(onChainTenderId, onChainBidId, !!data.preliminaryPass, !!data.qualificationPass);
+  const receipt = await tx.wait();
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainTenderId, onChainBidId };
+}
+
+// The contract computes the winner itself — lowest revealed amount among
+// committee-qualified (2-of-3 majority) bids — from data already on-chain.
+// No vendor/amount is accepted as input, so the caller can't assert an
+// outcome; it can only read back what the chain actually decided from the
+// ContractAwarded event.
+async function onChainFinalizeAward(
+  procContract: Contract,
+  data: Record<string, unknown>
+): Promise<{ txHash: string; blockNumber: number; blockHash: string; onChainWinner?: string; onChainAmount?: string; onChainBidId?: string }> {
+  const onChainTenderId = onChainTenderIdCache[data.tenderId as string] || keccak256(data.tenderId as string);
+  const tx = await procContract.finalizeAward(onChainTenderId);
+  const receipt = await tx.wait();
+
+  const event = receipt.logs?.find((log: any) => {
+    try { return procContract.interface.parseLog(log)?.name === 'ContractAwarded'; } catch { return false; }
+  });
+  let onChainWinner: string | undefined;
+  let onChainAmount: string | undefined;
+  let onChainBidId: string | undefined;
+  if (event) {
+    const parsed = procContract.interface.parseLog(event);
+    onChainBidId = parsed?.args?.[1];
+    onChainWinner = parsed?.args?.[2];
+    onChainAmount = parsed?.args?.[3]?.toString();
+  }
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, blockHash: receipt.blockHash, onChainWinner, onChainAmount, onChainBidId };
 }
 
 async function onChainPayment(
@@ -281,7 +457,7 @@ export async function addProcurementRecordAsync(
   // Try on-chain if wallet is connected and on correct network
   if (web3.connected && web3.isCorrectNetwork && web3.procurementContract) {
     try {
-      let receipt: { txHash: string; blockNumber: number; blockHash: string; onChainDisputeId?: string };
+      let receipt: { txHash: string; blockNumber: number; blockHash: string; onChainDisputeId?: string; onChainWinner?: string; onChainAmount?: string; onChainBidId?: string; onChainTenderId?: string };
 
       switch (type) {
         case 'tender':
@@ -293,10 +469,27 @@ export async function addProcurementRecordAsync(
           break;
         case 'bid':
         case 'bid_submission':
-          receipt = await onChainBid(web3.procurementContract, data);
+          // Single-Source has nothing to seal against (Art. 3(10)) — goes
+          // straight on-chain with a real amount. Every other method commits
+          // only a hash; the real amount is posted in bid_reveal below.
+          receipt = data.isSingleSource
+            ? await onChainSubmitBidDirect(web3.procurementContract, data)
+            : await onChainCommitBid(web3.procurementContract, data);
+          break;
+        case 'bid_reveal':
+          receipt = await onChainRevealBid(web3.procurementContract, data);
+          break;
+        case 'committee_propose':
+          receipt = await onChainProposeCommittee(web3.procurementContract, data);
+          break;
+        case 'committee_approve':
+          receipt = await onChainApproveCommittee(web3.procurementContract, data);
+          break;
+        case 'committee_vote':
+          receipt = await onChainVoteOnBid(web3.procurementContract, data);
           break;
         case 'award':
-          receipt = await onChainAward(web3.procurementContract, data);
+          receipt = await onChainFinalizeAward(web3.procurementContract, data);
           break;
         case 'payment':
           receipt = await onChainPayment(web3.procurementContract, data);
@@ -320,9 +513,15 @@ export async function addProcurementRecordAsync(
           throw new Error(`Unknown type: ${type}`);
       }
 
-      // Include on-chain dispute ID in the data if available
-      const resultData = receipt.onChainDisputeId
-        ? { ...data, onChainDisputeId: receipt.onChainDisputeId }
+      // Include on-chain dispute ID / finalizeAward's computed winner / the
+      // real on-chain tender+bid IDs in the data if available, so the
+      // caller can read back what the contract actually decided or
+      // persist these IDs onto the record itself. Persisting them is what
+      // makes voting/revealing survive a page reload — the in-memory
+      // caches above are only a same-session fast path, never the only
+      // copy.
+      const resultData = (receipt.onChainDisputeId || receipt.onChainWinner || receipt.onChainBidId || receipt.onChainTenderId)
+        ? { ...data, onChainDisputeId: receipt.onChainDisputeId, onChainWinner: receipt.onChainWinner, onChainAmount: receipt.onChainAmount, onChainBidId: receipt.onChainBidId, onChainTenderId: receipt.onChainTenderId }
         : data;
 
       return {

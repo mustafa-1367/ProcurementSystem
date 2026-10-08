@@ -1,4 +1,9 @@
 require("@nomicfoundation/hardhat-toolbox");
+// Hardhat is a separate Node process from Vite (which auto-loads .env.local
+// for the frontend) — it never reads .env.local on its own, so without this
+// DEPLOYER_PRIVATE_KEY / SEPOLIA_RPC_URL are just undefined here, silently
+// leaving the sepolia network with zero signers.
+require("dotenv").config({ path: ".env.local" });
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Send, FileText, Banknote, Calendar, Building, Eye, Upload, ShieldCheck, Lock, CheckCircle, Shield } from 'lucide-react';
+import { Send, FileText, Banknote, Calendar, Building, Eye, Upload, ShieldCheck, Lock, CheckCircle, Shield, LockOpen, AlertTriangle } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
+import { generateSalt, computeCommitment, storeBidSecret, getBidSecret, verifyReveal, verifyRevealedBid } from '../utils/commitReveal';
 
 interface SubmitBidProps {
   tenders: any[];
@@ -27,7 +28,9 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
 
   const [eligibilityError, setEligibilityError] = useState(false);
   const [notInvitedError, setNotInvitedError] = useState(false);
-  const [bidSuccess, setBidSuccess] = useState<{ bidId: string; tenderTitle: string; vendorName: string; amount: string; onChain: boolean } | null>(null);
+  const [bidSuccess, setBidSuccess] = useState<{ bidId: string; tenderTitle: string; vendorName: string; amount: string; onChain: boolean; isSingleSource: boolean } | null>(null);
+  const [revealErrors, setRevealErrors] = useState<Record<string, string>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
 
   const publishedTenders = tenders.filter((td) => td.status === 'published');
   const myBids = bids;
@@ -37,6 +40,19 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
   const isInvited = (tender: any, name: string) =>
     tender.method !== 'Restricted Bidding' ||
     (tender.invitedBidders || []).some((b: any) => b.name?.toLowerCase().trim() === name?.toLowerCase().trim());
+  // The dropdown only ever lists companies that can actually submit — an
+  // unregistered name was never a selectable option in the first place,
+  // rather than something the form lets you type and then rejects after
+  // the fact. For Restricted Bidding, narrow further to the invited list,
+  // since Art. 3(9) means an uninvited (even if registered) company still
+  // can't bid on that specific tender.
+  const getSelectableCompanies = (tender: any) => {
+    if (tender?.method === 'Restricted Bidding') {
+      const invitedNames = new Set((tender.invitedBidders || []).map((b: any) => b.name?.toLowerCase().trim()));
+      return registeredSuppliers.filter((s: any) => invitedNames.has(s.companyName?.toLowerCase().trim()));
+    }
+    return registeredSuppliers;
+  };
 
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,17 +82,35 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
       return;
     }
 
+    // Single-Source has exactly one party and no competing prices to hide
+    // from each other — sealing has nothing to protect there, so it keeps a
+    // plain amount. Every competitive method commits instead of storing the
+    // real amount: only a hash goes into the shared bid record and on-chain;
+    // the bidder holds (amount, salt) locally until they reveal after the
+    // deadline (see src/utils/commitReveal.ts).
+    const isSingleSource = selectedTender.method === 'Single-Source';
+    const bidId = `BID-${Date.now()}`;
+    const salt = isSingleSource ? null : generateSalt();
+    const commitment = isSingleSource ? null : computeCommitment(bidForm.amount, salt!);
+
     const newBid = {
-      id: `BID-${Date.now()}`,
+      id: bidId,
       tenderId: selectedTender.id,
       tenderTitle: selectedTender.title,
       ...bidForm,
+      amount: isSingleSource ? bidForm.amount : null,
+      commitment,
+      revealed: isSingleSource ? undefined : false,
       vendorEmail: registeredSupplier.email,
       status: 'submitted',
       submittedAt: new Date().toISOString(),
       evaluated: false,
       score: null,
     };
+
+    if (!isSingleSource) {
+      storeBidSecret(bidId, bidForm.amount, salt!);
+    }
 
     const updatedBids = [...bids, newBid];
     setBids(updatedBids);
@@ -86,8 +120,26 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
       tenderId: selectedTender.id,
       vendor: bidForm.vendorName,
       amount: bidForm.amount,
+      commitment,
+      isSingleSource,
+      // Pass through the tender's own persisted on-chain ID — this is
+      // what lets committing a bid skip straight to the one commitBid
+      // transaction instead of silently also paying to create+publish the
+      // tender itself (3 MetaMask confirmations for the first bid, 1 for
+      // every bid after, which is what happened before this was wired up).
+      onChainTenderId: selectedTender.onChainTenderId,
       timestamp: Date.now(),
     });
+
+    // Persist the real on-chain tender/bid IDs onto the bid record itself
+    // (not just blockchain.ts's in-memory cache) — this is what lets
+    // revealing and committee voting keep working after a page reload,
+    // instead of silently failing once the cache is gone.
+    const onChainBidId = (contract?.data as any)?.onChainBidId as string | undefined;
+    const onChainTenderId = (contract?.data as any)?.onChainTenderId as string | undefined;
+    if (onChain && (onChainBidId || onChainTenderId)) {
+      setBids(updatedBids.map((b) => (b.id === newBid.id ? { ...b, onChainBidId, onChainTenderId } : b)));
+    }
 
     if (success) {
       setBlockchainRecords([...blockchainRecords, {
@@ -109,9 +161,67 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
       vendorName: bidForm.vendorName,
       amount: bidForm.amount,
       onChain: !!onChain,
+      isSingleSource,
     });
     setBidForm({ vendorName: '', vendorEmail: '', amount: '', timeline: '' });
     setShowBidForm(false);
+  };
+
+  const handleReveal = async (bid: any) => {
+    const secret = getBidSecret(bid.id);
+    if (!secret) {
+      setRevealErrors((prev) => ({ ...prev, [bid.id]: 'No local secret found for this bid on this device — it cannot be revealed and will be excluded from evaluation.' }));
+      return;
+    }
+    if (!verifyReveal(secret.amount, secret.salt, bid.commitment)) {
+      setRevealErrors((prev) => ({ ...prev, [bid.id]: 'Revealed value does not match the original commitment — integrity check failed.' }));
+      return;
+    }
+    setRevealErrors((prev) => { const next = { ...prev }; delete next[bid.id]; return next; });
+    setRevealingId(bid.id);
+    try {
+      const { block, contract, success, onChain } = await addProcurementRecordAsync('bid_reveal', {
+        bidId: bid.id,
+        tenderId: bid.tenderId,
+        vendor: bid.vendorName,
+        amount: secret.amount,
+        salt: secret.salt,
+        // Pass through whatever was already persisted on the bid itself
+        // (from commit time) — onChainRevealBid prefers this over its own
+        // in-memory cache, so revealing still works after a reload.
+        onChainBidId: bid.onChainBidId,
+        onChainTenderId: bid.onChainTenderId,
+        timestamp: Date.now(),
+      });
+
+      const revealedOnChainBidId = (contract?.data as any)?.onChainBidId as string | undefined;
+      const revealedOnChainTenderId = (contract?.data as any)?.onChainTenderId as string | undefined;
+
+      // The salt is published alongside the amount so any reader can
+      // independently recompute the commitment rather than trusting this
+      // browser's own check above.
+      setBids(bids.map((b: any) => (b.id === bid.id ? {
+        ...b, amount: secret.amount, salt: secret.salt, revealed: true, revealedAt: new Date().toISOString(),
+        onChainBidId: b.onChainBidId || revealedOnChainBidId,
+        onChainTenderId: b.onChainTenderId || revealedOnChainTenderId,
+      } : b)));
+
+      if (success) {
+        setBlockchainRecords([...blockchainRecords, {
+          id: block.hash,
+          type: 'bid_revealed',
+          bidId: bid.id,
+          contractId: contract.id,
+          transactionHash: contract.transactionHash,
+          timestamp: new Date().toISOString(),
+          verified: onChain,
+          simulated: !onChain,
+          onChain,
+        }]);
+      }
+    } finally {
+      setRevealingId(null);
+    }
   };
 
   const statusBadge = (status: string) => {
@@ -145,45 +255,94 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
             <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: '#f0f0ee', color: '#6e6c66' }}>{myBids.length}</span>
           </div>
           <div>
-            {myBids.map((bid: any, idx: number) => (
+            {myBids.map((bid: any, idx: number) => {
+              const sealed = bid.commitment && !bid.revealed;
+              const tender = tenders.find((td: any) => td.id === bid.tenderId);
+              const deadlinePassed = tender && new Date(tender.deadline).getTime() <= Date.now();
+              const revealVerified = verifyRevealedBid(bid);
+              return (
               <div key={bid.id} style={{
-                padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 20px',
                 borderBottom: idx < myBids.length - 1 ? '1px solid rgba(11,11,11,0.05)' : 'none',
                 transition: 'background 0.15s', cursor: 'default',
               }}
               onMouseEnter={(e) => (e.currentTarget.style.background = '#fafaf9')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0b0b0b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bid.tenderTitle}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                    <span style={{ fontSize: 12, color: '#6e6c66', fontFamily: 'ui-monospace, monospace' }}>{bid.id}</span>
-                    <span style={{ fontSize: 11, color: '#9e9d99' }}>·</span>
-                    <span style={{ fontSize: 12, color: '#6e6c66', display: 'flex', alignItems: 'center', gap: 3 }}>
-                      <Calendar style={{ width: 11, height: 11 }} />
-                      {new Date(bid.submittedAt).toLocaleDateString()}
-                    </span>
-                    {bid.amount && (
-                      <>
-                        <span style={{ fontSize: 11, color: '#9e9d99' }}>·</span>
-                        <span style={{ fontSize: 12, color: '#0b0b0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
-                          <Banknote style={{ width: 11, height: 11, color: '#6e6c66' }} />
-                          {Number(bid.amount).toLocaleString()} AFN
-                        </span>
-                      </>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0b0b0b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bid.tenderTitle}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: '#6e6c66', fontFamily: 'ui-monospace, monospace' }}>{bid.id}</span>
+                      <span style={{ fontSize: 11, color: '#9e9d99' }}>·</span>
+                      <span style={{ fontSize: 12, color: '#6e6c66', display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <Calendar style={{ width: 11, height: 11 }} />
+                        {new Date(bid.submittedAt).toLocaleDateString()}
+                      </span>
+                      {bid.amount && (
+                        <>
+                          <span style={{ fontSize: 11, color: '#9e9d99' }}>·</span>
+                          <span style={{ fontSize: 12, color: '#0b0b0b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <Banknote style={{ width: 11, height: 11, color: '#6e6c66' }} />
+                            {Number(bid.amount).toLocaleString()} AFN
+                          </span>
+                        </>
+                      )}
+                      {revealVerified !== null && (
+                        <>
+                          <span style={{ fontSize: 11, color: '#9e9d99' }}>·</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 3, color: revealVerified ? '#065f46' : '#991b1b' }} title={revealVerified ? 'Revealed (amount, salt) independently recomputes to the original commitment' : 'Revealed value does not match the original commitment'}>
+                            {revealVerified ? '✓ Verified reveal' : '✗ Integrity check failed'}
+                          </span>
+                        </>
+                      )}
+                      {sealed && (
+                        <>
+                          <span style={{ fontSize: 11, color: '#9e9d99' }}>·</span>
+                          <span style={{ fontSize: 12, color: '#1c5cab', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 600 }}>
+                            <Lock style={{ width: 11, height: 11 }} /> Sealed — amount hidden until you reveal
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                    <span style={statusBadge(bid.status)}>{bid.status}</span>
+                    {blockchainRecords.some(r => r.bidId === bid.id && r.onChain) && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, color: '#065f46', background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                        <Shield style={{ width: 10, height: 10 }} /> On-Chain
+                      </span>
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 12 }}>
-                  <span style={statusBadge(bid.status)}>{bid.status}</span>
-                  {blockchainRecords.some(r => r.bidId === bid.id && r.onChain) && (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, color: '#065f46', background: '#ecfdf5', border: '1px solid #a7f3d0' }}>
-                      <Shield style={{ width: 10, height: 10 }} /> On-Chain
-                    </span>
-                  )}
-                </div>
+                {sealed && (
+                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      disabled={!deadlinePassed || revealingId === bid.id}
+                      onClick={() => handleReveal(bid)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700,
+                        padding: '6px 12px', borderRadius: 8, border: 'none',
+                        background: deadlinePassed ? '#0f2942' : '#e5e7eb',
+                        color: deadlinePassed ? '#fff' : '#9ca3af',
+                        cursor: deadlinePassed ? 'pointer' : 'not-allowed',
+                      }}
+                      title={deadlinePassed ? 'Reveal your sealed bid amount' : 'You can reveal only after the submission deadline passes'}
+                    >
+                      <LockOpen style={{ width: 12, height: 12 }} />
+                      {revealingId === bid.id ? 'Revealing…' : deadlinePassed ? 'Reveal Bid' : 'Reveal opens after deadline'}
+                    </button>
+                    {revealErrors[bid.id] && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#991b1b' }}>
+                        <AlertTriangle style={{ width: 12, height: 12 }} /> {revealErrors[bid.id]}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -385,22 +544,36 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                       <Building style={{ width: 14, height: 14, color: '#6e6c66' }} />
                       {t('submitBid.vendorName')} *
                     </label>
-                    <input
-                      required
-                      value={bidForm.vendorName}
-                      onChange={(e) => { setBidForm({ ...bidForm, vendorName: e.target.value }); setEligibilityError(false); }}
-                      style={{
-                        width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
-                        border: eligibilityError ? '1.5px solid #f87171' : '1px solid #e1e0d9',
-                        outline: 'none', background: '#fff', color: '#0b0b0b',
-                      }}
-                    />
-                    {bidForm.vendorName.trim().length > 2 && !isRegisteredByName(bidForm.vendorName) && (
-                      <div style={{ fontSize: 11.5, color: '#b91c1c', marginTop: 4, fontWeight: 600 }}>
-                        This company is not registered. Complete e-KYC registration first.
-                      </div>
-                    )}
-                    {bidForm.vendorName.trim().length > 2 && isRegisteredByName(bidForm.vendorName) && (
+                    {(() => {
+                      const selectable = selectedTender ? getSelectableCompanies(selectedTender) : [];
+                      if (selectable.length === 0) {
+                        return (
+                          <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 600, padding: '9px 12px', border: '1.5px dashed #f87171', borderRadius: 8, background: '#fef2f2' }}>
+                            {selectedTender?.method === 'Restricted Bidding'
+                              ? 'None of the invited companies are registered yet via e-KYC.'
+                              : 'No companies are registered yet. Complete e-KYC registration before submitting a bid.'}
+                          </div>
+                        );
+                      }
+                      return (
+                        <select
+                          required
+                          value={bidForm.vendorName}
+                          onChange={(e) => { setBidForm({ ...bidForm, vendorName: e.target.value }); setEligibilityError(false); }}
+                          style={{
+                            width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                            border: eligibilityError ? '1.5px solid #f87171' : '1px solid #e1e0d9',
+                            outline: 'none', background: '#fff', color: '#0b0b0b',
+                          }}
+                        >
+                          <option value="" disabled>Select your registered company…</option>
+                          {selectable.map((s: any) => (
+                            <option key={s.id || s.companyName} value={s.companyName}>{s.companyName}</option>
+                          ))}
+                        </select>
+                      );
+                    })()}
+                    {bidForm.vendorName && (
                       <div style={{ fontSize: 11.5, color: '#059669', marginTop: 4, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                         <CheckCircle style={{ width: 12, height: 12 }} /> Registered & eligible
                       </div>
@@ -539,13 +712,17 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                 <CheckCircle style={{ width: 32, height: 32, color: '#065f46' }} />
               </div>
               <h3 style={{ margin: '0 0 4px 0', fontSize: 20, fontWeight: 700, color: '#065f46' }}>Bid Submitted Successfully</h3>
-              <p style={{ margin: 0, fontSize: 14, color: '#047857' }}>Your bid has been recorded and sealed.</p>
+              <p style={{ margin: 0, fontSize: 14, color: '#047857' }}>
+                {bidSuccess.isSingleSource
+                  ? 'Your bid has been recorded.'
+                  : 'Your bid has been recorded and sealed.'}
+              </p>
             </div>
             <div style={{ padding: 24 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                  <span style={{ color: '#6b7280' }}>Tender</span>
-                  <span style={{ fontWeight: 600, color: '#0f2942' }}>{bidSuccess.tenderTitle}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', fontSize: 14 }}>
+                  <span style={{ color: '#6b7280', whiteSpace: 'nowrap' }}>Tender:</span>
+                  <span style={{ fontWeight: 600, color: '#0f2942', textAlign: 'right' }}>{bidSuccess.tenderTitle}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
                   <span style={{ color: '#6b7280' }}>Bidder</span>
@@ -561,9 +738,11 @@ export function SubmitBid({ tenders, bids, setBids, setBlockchainRecords, blockc
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-                <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Lock style={{ width: 12, height: 12 }} /> Sealed & Encrypted
-                </span>
+                {!bidSuccess.isSingleSource && (
+                  <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Lock style={{ width: 12, height: 12 }} /> Sealed (Commit-Reveal)
+                  </span>
+                )}
                 {bidSuccess.onChain && (
                   <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                     ● Recorded On-Chain

@@ -338,7 +338,7 @@ export const en = {
     kycRequiredDesc: 'Your company must be registered and verified through e-KYC before submitting bids. Go to the Register (e-KYC) tab to complete registration first.',
     bidderInfo: 'Bidder & Financial Information',
     technicalSection: 'Technical Proposal & Experience',
-    sealedNotice: 'Your bid will be sealed and encrypted until the submission deadline passes',
+    sealedNotice: 'Your bid amount will be sealed via a commitment hash — only you can reveal it, and only after the submission deadline passes',
     cancel: 'Cancel',
     vendorPlaceholder: 'Enter company name',
     emailPlaceholder: 'vendor@example.com',
@@ -951,6 +951,9 @@ export const en = {
     faq7Q: 'What tokens (TOK) are used for?',
     faq7A: 'TOK is the platform\'s internal token used for governance participation, staking on dispute votes, and milestone-based contract payments. You can view your balance and transaction history in the Wallet panel accessible from the navigation bar.',
 
+    faq8Q: 'How are bids evaluated and scored?',
+    faq8A: 'Scoring criteria differ by procurement type. For Goods: similar experience, a valid business license, bank statements, and sufficient cash in the bank account matching the project cost. For Specialized Services (e.g. system design): similar experience, the implementation plan (such as a demo), and staff CVs. A sample NPA scoring checklist weights similar experience in the public sector or with international organizations at 50 points and company background at 10 points, with the remaining points distributed across available bank balance/liquidity, updated license, and staff CVs.',
+
     gl0Term: 'Blockchain',
     gl0Def: 'A distributed, append-only digital ledger that stores records in linked blocks. Once data is written it cannot be changed, providing a tamper-proof audit trail.',
 
@@ -980,6 +983,18 @@ export const en = {
 
     gl9Term: 'Reputation Score',
     gl9Def: 'A numeric rating (0–100) assigned to each supplier based on bid accuracy, delivery timeliness, work quality, and regulatory compliance. Higher scores improve visibility in future tenders.',
+
+    gl10Term: 'Single-Source Bidding',
+    gl10Def: 'National: used by government entities for emergencies, with a bidding timeline of 1 to 7 days. International: used when no company in Afghanistan has the capacity to provide the required goods or services, sourcing instead from the global market.',
+
+    gl11Term: 'Restricted Bidding',
+    gl11Def: 'A bidding method tailored to specific requirements, with a bidding timeline of 7 to 14 days.',
+
+    gl12Term: 'National Open Bidding',
+    gl12Def: 'Requires a minimum of 21 days (no maximum is specified in procurement rules). Within that period, bidders submit a sealed envelope containing their business license, similar project experience, price, bank guarantee, bank statement, and — for services — a work plan. Bid opening occurs on day 21. For administrative/system procurements (e.g. an MIS), evaluation is not based on price alone but on the functionality of the proposed solution, using a Cost and Quality method.',
+
+    gl13Term: 'Tender Advertisement Platforms',
+    gl13Def: 'National bidding processes are advertised locally. International bidding processes (Single-Source, Open, or Restricted) are additionally published on the National Procurement Authority website (npa.gov.af) and dgMarket (dgmarket.com).',
 
     // User Guide
     userGuideTitle: 'User Guide',

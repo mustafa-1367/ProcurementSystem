@@ -21,6 +21,18 @@ contract ProcurementSystem {
     constructor() {
         owner = msg.sender;
         walletRoles[msg.sender] = Role.Government;
+        // Bootstrap seed matching the app-layer Minister/Director allowlist
+        // already used in this prototype (src/utils/committeeVerification.ts)
+        // — a public address, not a secret. Owner can add/remove further
+        // Directors post-deployment via setAuthorizedDirector.
+        authorizedDirectors[0x15bFf92fe34e25633dc2F91834EE6d921002f55F] = true;
+        emit DirectorAuthorized(0x15bFf92fe34e25633dc2F91834EE6d921002f55F, true);
+    }
+
+    /// @notice Owner grants/revokes Minister/Director committee-approval authority
+    function setAuthorizedDirector(address account, bool authorized) external onlyOwner {
+        authorizedDirectors[account] = authorized;
+        emit DirectorAuthorized(account, authorized);
     }
 
     /// @notice Self-register as Citizen or Supplier
@@ -46,7 +58,11 @@ contract ProcurementSystem {
     // ── Events ──────────────────────────────────────────────────────────
     event TenderCreated(bytes32 indexed tenderId, address indexed creator, string title, uint256 budget, uint256 deadline);
     event TenderPublished(bytes32 indexed tenderId, address indexed publisher);
-    event BidSubmitted(bytes32 indexed tenderId, bytes32 indexed bidId, address indexed bidder, uint256 amount);
+    event BidCommitted(bytes32 indexed tenderId, bytes32 indexed bidId, address indexed bidder, bytes32 commitment);
+    event BidRevealed(bytes32 indexed tenderId, bytes32 indexed bidId, address indexed bidder, uint256 amount);
+    event CommitteeProposed(bytes32 indexed tenderId, address indexed proposer, address member0, address member1, address member2);
+    event CommitteeApproved(bytes32 indexed tenderId, address indexed approver);
+    event BidVoted(bytes32 indexed tenderId, bytes32 indexed bidId, address indexed voter, bool preliminaryPass, bool qualificationPass);
     event ContractAwarded(bytes32 indexed tenderId, bytes32 indexed bidId, address indexed vendor, uint256 amount);
     event PaymentProcessed(bytes32 indexed contractId, uint256 milestoneId, uint256 amount);
     event DisputeCreated(bytes32 indexed disputeId, address indexed creator, string title);
@@ -54,6 +70,7 @@ contract ProcurementSystem {
     event DisputeResolved(bytes32 indexed disputeId, bool approved, uint256 approvalRate);
     event WhistleblowerReport(bytes32 indexed reportId, bytes32 zkProofHash, string category, string severity);
     event SupplierRegistered(address indexed supplier, string companyName);
+    event DirectorAuthorized(address indexed account, bool authorized);
 
     // ── Structs ─────────────────────────────────────────────────────────
     struct Tender {
@@ -67,12 +84,23 @@ contract ProcurementSystem {
         uint256 createdAt;
     }
 
+    // Commit-reveal sealed bid. `commitment` is keccak256(abi.encode(amount,
+    // salt)) at submission time; `amount` stays 0 and `revealed` false until
+    // the bidder proves they know the (amount, salt) behind it — the chain
+    // itself refuses a reveal that doesn't recompute to the stored
+    // commitment, so integrity no longer depends on the app checking
+    // honestly. Single-Source bids (nothing to seal against — Art. 3(10))
+    // skip commit-reveal entirely via submitBidDirect, which sets
+    // `revealed = true` immediately with `commitment = 0`.
     struct Bid {
         bytes32 id;
         bytes32 tenderId;
         address bidder;
+        bytes32 commitment;
         uint256 amount;
+        bool revealed;
         uint256 submittedAt;
+        uint256 revealedAt;
     }
 
     struct Dispute {
@@ -86,12 +114,36 @@ contract ProcurementSystem {
         uint256 votingDeadline;
     }
 
+    // One committee member's recorded judgment on one bid — majority (2 of
+    // 3) of these decides qualification, computed on-chain in
+    // isBidQualified rather than trusted from an app-supplied boolean.
+    struct Vote {
+        bool preliminaryPass;
+        bool qualificationPass;
+        bool voted;
+    }
+
     // ── State ───────────────────────────────────────────────────────────
     mapping(bytes32 => Tender) public tenders;
-    mapping(bytes32 => Bid[]) public tenderBids;
+    mapping(bytes32 => bytes32[]) public tenderBidIds;
+    mapping(bytes32 => Bid) public bidsById;
     mapping(bytes32 => Dispute) public disputes;
     mapping(bytes32 => mapping(address => bool)) public hasVoted;
     mapping(address => bool) public registeredSuppliers;
+
+    // Evaluation Committee: proposed by the tender's creator (Art.
+    // 3(18)/3(19) — Procurement Official), approved by an authorized
+    // Director distinct from the proposer (Art. 23's maker-checker split).
+    mapping(bytes32 => address[3]) public committeeMembers;
+    mapping(bytes32 => address) public committeeProposer;
+    mapping(bytes32 => bool) public committeeApproved;
+    mapping(bytes32 => mapping(bytes32 => mapping(address => Vote))) public votes;
+
+    // Director allowlist — mirrors the app-layer allowlist this prototype
+    // already used for Minister/Director approval; kept as an explicit
+    // mapping rather than extending the Role enum, so existing role
+    // numbering (and everything that depends on it) doesn't shift.
+    mapping(address => bool) public authorizedDirectors;
 
     bytes32[] public tenderIds;
     bytes32[] public disputeIds;
@@ -134,52 +186,187 @@ contract ProcurementSystem {
         emit TenderPublished(tenderId, msg.sender);
     }
 
-    // ── Bid Operations ──────────────────────────────────────────────────
+    // ── Bid Operations (commit-reveal) ─────────────────────────────────
 
-    function submitBid(bytes32 tenderId, uint256 amount) external returns (bytes32 bidId) {
+    /// @notice Submit a sealed bid: only the commitment hash is stored, never the amount.
+    function commitBid(bytes32 tenderId, bytes32 commitment) external returns (bytes32 bidId) {
         Tender storage t = tenders[tenderId];
         require(t.published, "Tender not published");
         require(!t.awarded, "Tender already awarded");
         require(block.timestamp <= t.deadline, "Deadline passed");
 
-        bidId = keccak256(abi.encodePacked(tenderId, msg.sender, amount, block.timestamp));
+        bidId = keccak256(abi.encodePacked(tenderId, msg.sender, commitment, block.timestamp));
 
-        tenderBids[tenderId].push(Bid({
+        bidsById[bidId] = Bid({
             id: bidId,
             tenderId: tenderId,
             bidder: msg.sender,
-            amount: amount,
-            submittedAt: block.timestamp
-        }));
+            commitment: commitment,
+            amount: 0,
+            revealed: false,
+            submittedAt: block.timestamp,
+            revealedAt: 0
+        });
+        tenderBidIds[tenderId].push(bidId);
 
         totalRecords++;
-        emit BidSubmitted(tenderId, bidId, msg.sender, amount);
+        emit BidCommitted(tenderId, bidId, msg.sender, commitment);
+    }
+
+    /// @notice Reveal a sealed bid after the deadline. Reverts if (amount, salt)
+    /// doesn't recompute to the stored commitment — integrity enforced on-chain,
+    /// not by trusting the app to check honestly.
+    function revealBid(bytes32 tenderId, bytes32 bidId, uint256 amount, bytes32 salt) external {
+        Tender storage t = tenders[tenderId];
+        require(block.timestamp > t.deadline, "Reveal opens after deadline");
+        Bid storage b = bidsById[bidId];
+        require(b.tenderId == tenderId, "Bid not found for this tender");
+        require(b.bidder == msg.sender, "Only the bidder can reveal their own bid");
+        require(!b.revealed, "Already revealed");
+        require(keccak256(abi.encode(amount, salt)) == b.commitment, "Reveal does not match commitment");
+
+        b.amount = amount;
+        b.revealed = true;
+        b.revealedAt = block.timestamp;
+
+        totalRecords++;
+        emit BidRevealed(tenderId, bidId, msg.sender, amount);
+    }
+
+    /// @notice Single-Source only (Art. 3(10)) — nothing to seal against with one party.
+    function submitBidDirect(bytes32 tenderId, uint256 amount) external returns (bytes32 bidId) {
+        Tender storage t = tenders[tenderId];
+        require(t.published, "Tender not published");
+        require(!t.awarded, "Tender already awarded");
+
+        bidId = keccak256(abi.encodePacked(tenderId, msg.sender, amount, block.timestamp));
+
+        bidsById[bidId] = Bid({
+            id: bidId,
+            tenderId: tenderId,
+            bidder: msg.sender,
+            commitment: bytes32(0),
+            amount: amount,
+            revealed: true,
+            submittedAt: block.timestamp,
+            revealedAt: block.timestamp
+        });
+        tenderBidIds[tenderId].push(bidId);
+
+        totalRecords++;
+        emit BidCommitted(tenderId, bidId, msg.sender, bytes32(0));
+        emit BidRevealed(tenderId, bidId, msg.sender, amount);
     }
 
     function getBidCount(bytes32 tenderId) external view returns (uint256) {
-        return tenderBids[tenderId].length;
+        return tenderBidIds[tenderId].length;
     }
 
-    // Bids are sealed until deadline passes
     function getBid(bytes32 tenderId, uint256 index) external view returns (
-        bytes32 bidId, address bidder, uint256 amount, uint256 submittedAt
+        bytes32 bidId, address bidder, bool revealed, uint256 amount, uint256 submittedAt
     ) {
+        Bid storage b = bidsById[tenderBidIds[tenderId][index]];
+        return (b.id, b.bidder, b.revealed, b.revealed ? b.amount : 0, b.submittedAt);
+    }
+
+    // ── Evaluation Committee (Art. 3(18)/3(19)/23(1)-(2)) ───────────────
+
+    /// @notice Propose the 3-member committee. Only the tender's creator (Procurement Official).
+    function proposeCommittee(bytes32 tenderId, address[3] calldata members) external {
         Tender storage t = tenders[tenderId];
-        require(block.timestamp > t.deadline, "Bids sealed until deadline");
-        Bid storage b = tenderBids[tenderId][index];
-        return (b.id, b.bidder, b.amount, b.submittedAt);
+        require(t.creator == msg.sender, "Only the tender creator can propose a committee");
+        require(!committeeApproved[tenderId], "Committee already approved");
+        require(members[0] != address(0) && members[1] != address(0) && members[2] != address(0), "All three seats required");
+        require(members[0] != members[1] && members[1] != members[2] && members[0] != members[2], "Committee seats must be distinct addresses");
+
+        committeeMembers[tenderId] = members;
+        committeeProposer[tenderId] = msg.sender;
+        totalRecords++;
+        emit CommitteeProposed(tenderId, msg.sender, members[0], members[1], members[2]);
+    }
+
+    /// @notice Approve the proposed committee. Only an authorized Director, distinct from the proposer.
+    function approveCommittee(bytes32 tenderId) external {
+        require(authorizedDirectors[msg.sender], "Not an authorized Director");
+        require(msg.sender != committeeProposer[tenderId], "Cannot approve your own proposal");
+        address[3] memory m = committeeMembers[tenderId];
+        require(m[0] != address(0), "No committee proposed");
+        require(!committeeApproved[tenderId], "Already approved");
+
+        committeeApproved[tenderId] = true;
+        totalRecords++;
+        emit CommitteeApproved(tenderId, msg.sender);
+    }
+
+    function isCommitteeMember(bytes32 tenderId, address account) public view returns (bool) {
+        address[3] memory m = committeeMembers[tenderId];
+        return account == m[0] || account == m[1] || account == m[2];
+    }
+
+    /// @notice A committee member records their own preliminary/qualification judgment for one bid.
+    function voteOnBid(bytes32 tenderId, bytes32 bidId, bool preliminaryPass, bool qualificationPass) external {
+        Tender storage t = tenders[tenderId];
+        require(committeeApproved[tenderId], "Committee not approved");
+        require(isCommitteeMember(tenderId, msg.sender), "Not a committee member for this tender");
+        require(block.timestamp > t.deadline, "Voting opens after the deadline");
+
+        votes[tenderId][bidId][msg.sender] = Vote(preliminaryPass, qualificationPass, true);
+        totalRecords++;
+        emit BidVoted(tenderId, bidId, msg.sender, preliminaryPass, qualificationPass);
+    }
+
+    /// @notice 2-of-3 majority of recorded committee votes — computed here, not trusted from the app.
+    function isBidQualified(bytes32 tenderId, bytes32 bidId) public view returns (bool) {
+        address[3] memory m = committeeMembers[tenderId];
+        uint256 prelimYes;
+        uint256 qualYes;
+        // Threshold is 2 of the fixed 3 committee seats — not 2 of however
+        // many happened to vote. A single early "yes" must never look like
+        // a majority just because nobody else has voted yet.
+        for (uint256 i = 0; i < 3; i++) {
+            Vote storage v = votes[tenderId][bidId][m[i]];
+            if (v.voted) {
+                if (v.preliminaryPass) prelimYes++;
+                if (v.qualificationPass) qualYes++;
+            }
+        }
+        return prelimYes >= 2 && qualYes >= 2;
     }
 
     // ── Award ───────────────────────────────────────────────────────────
 
-    function awardContract(bytes32 tenderId, bytes32 bidId, address vendor, uint256 amount) external {
+    /// @notice Computes the winner itself (lowest revealed amount among committee-qualified
+    /// bids — Art. 22(5) Lowest Evaluated Bid / Rule 19(7) RFQ) rather than accepting a
+    /// vendor/amount the caller supplies. Callable by anyone once the deadline has passed —
+    /// the outcome is deterministic from on-chain data, so no single party needs to be
+    /// trusted to even trigger it, and none can block it by simply not calling.
+    /// @dev Services/QCBS's weighted technical+financial scoring is not yet implemented
+    /// on-chain (see MemberEvalInput.technicalScore in the app) — this covers the
+    /// lowest-price methods only (Open/Restricted Bidding, RFQ).
+    function finalizeAward(bytes32 tenderId) external {
         Tender storage t = tenders[tenderId];
-        require(t.creator == msg.sender, "Only creator can award");
         require(t.published, "Tender not published");
         require(!t.awarded, "Already awarded");
+        require(block.timestamp > t.deadline, "Deadline not passed");
+
+        bytes32[] memory ids = tenderBidIds[tenderId];
+        uint256 lowestAmount = type(uint256).max;
+        bytes32 winnerId;
+        address winnerAddr;
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            Bid storage b = bidsById[ids[i]];
+            if (b.revealed && isBidQualified(tenderId, b.id) && b.amount < lowestAmount) {
+                lowestAmount = b.amount;
+                winnerId = b.id;
+                winnerAddr = b.bidder;
+            }
+        }
+        require(winnerAddr != address(0), "No qualified revealed bid");
+
         t.awarded = true;
         totalRecords++;
-        emit ContractAwarded(tenderId, bidId, vendor, amount);
+        emit ContractAwarded(tenderId, winnerId, winnerAddr, lowestAmount);
     }
 
     // ── Payment ─────────────────────────────────────────────────────────

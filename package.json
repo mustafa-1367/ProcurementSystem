@@ -37,6 +37,7 @@
             "cmdk": "^1.1.1",
             "embla-carousel-react": "^8.6.0",
             "ethers": "^6.17.0",
+            "firebase": "^12.19.0",
             "input-otp": "^1.4.2",
             "jspdf": "^4.2.1",
             "jspdf-autotable": "^5.0.8",
@@ -58,7 +59,9 @@
             "@nomicfoundation/hardhat-toolbox": "^5.0.0",
             "@types/node": "^20.10.0",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "dotenv": "^18.0.5",
             "hardhat": "^2.29.1",
+            "terser": "^5.51.2",
             "vite": "6.3.5"
       },
       "scripts": {

@@ -300,8 +300,8 @@ export function SupplierTracker({
                         <div className="flex gap-6 mt-1 text-sm text-gray-500">
                           <span>
                             {t('supplier.amount')}:{' '}
-                            <strong className="text-gray-800">
-                              {Number(bid.amount ?? 0).toLocaleString()} {t('supplier.afn')}
+                            <strong className={bid.amount ? 'text-gray-800' : 'text-amber-700'}>
+                              {bid.amount ? `${Number(bid.amount).toLocaleString()} ${t('supplier.afn')}` : 'Sealed — not yet revealed'}
                             </strong>
                           </span>
                           <span>

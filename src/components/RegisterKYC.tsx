@@ -9,9 +9,10 @@ interface RegisterKYCProps {
   userRole: string;
   registeredSuppliers: any[];
   setRegisteredSuppliers: (suppliers: any[]) => void;
+  tenders?: any[];
 }
 
-export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole, registeredSuppliers, setRegisteredSuppliers }: RegisterKYCProps) {
+export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole, registeredSuppliers, setRegisteredSuppliers, tenders = [] }: RegisterKYCProps) {
   const { t } = useTranslation();
   const [successInfo, setSuccessInfo] = useState<{ companyName: string; supplierId: string; onChain: boolean } | null>(null);
   const [form, setForm] = useState({
@@ -30,13 +31,43 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
     (s) => s.companyName?.toLowerCase().trim() === form.companyName?.toLowerCase().trim() && form.companyName !== ''
   );
 
+  // Restricted Bidding (Art. 3(9)) only admits bidders whose registered
+  // company name exactly matches the name they were invited under — if a
+  // Procuring Entity typed a slightly different name when inviting someone
+  // not yet registered, registering under the "real" name silently locks
+  // that company out of the tender with no warning anywhere else in the
+  // app. Surface the mismatch here, before submission, so it can be
+  // caught instead of discovered later at bid time.
+  const invitedNameMismatch = (() => {
+    if (!form.email.trim()) return null;
+    for (const t of tenders) {
+      if (t.method !== 'Restricted Bidding') continue;
+      const invite = (t.invitedBidders || []).find(
+        (b: any) => b.email?.toLowerCase().trim() === form.email.toLowerCase().trim()
+      );
+      if (invite && invite.name?.toLowerCase().trim() !== form.companyName?.toLowerCase().trim()) {
+        return { tenderTitle: t.title, invitedName: invite.name };
+      }
+    }
+    return null;
+  })();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.companyName || !form.registrationNumber || !form.representative || !form.email) return;
 
-    // Check for duplicate
-    if (registeredSuppliers.some((s) => s.email === form.email)) {
+    // Check for duplicate — same email, same company name (case/whitespace-insensitive),
+    // or same registration number all count as the same bidder re-registering.
+    if (registeredSuppliers.some((s) => s.email?.toLowerCase().trim() === form.email.toLowerCase().trim())) {
       alert('This email is already registered.');
+      return;
+    }
+    if (registeredSuppliers.some((s) => s.companyName?.toLowerCase().trim() === form.companyName.toLowerCase().trim())) {
+      alert('A company with this name is already registered.');
+      return;
+    }
+    if (registeredSuppliers.some((s) => s.registrationNumber?.toLowerCase().trim() === form.registrationNumber.toLowerCase().trim())) {
+      alert('This business registration number is already registered.');
       return;
     }
 
@@ -193,6 +224,15 @@ export function RegisterKYC({ setBlockchainRecords, blockchainRecords, userRole,
               />
             </div>
           </div>
+
+          {invitedNameMismatch && (
+            <div style={{ ...formRowStyle, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#b91c1c', marginBottom: 2 }}>Name doesn't match your invitation</div>
+              <div style={{ fontSize: '12px', color: '#991b1b', lineHeight: 1.5 }}>
+                This email was invited to bid on <strong>{invitedNameMismatch.tenderTitle}</strong> (Restricted Bidding) under the name <strong>"{invitedNameMismatch.invitedName}"</strong>. Registering under a different company name will make you ineligible to bid on that tender — Art. 3(9) only admits bidders on the exact invited list. Use the invited name above, or ask the Procuring Entity to re-invite you under this name.
+              </div>
+            </div>
+          )}
 
           {/* Tax ID — full width */}
           <div style={formRowStyle}>

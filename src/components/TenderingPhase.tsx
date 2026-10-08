@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { FileText, Banknote, Calendar, Building, Send, Eye, Shield, TrendingDown, Lock, CheckCircle } from 'lucide-react';
+import { FileText, Banknote, Calendar, Building, Send, Eye, Shield, TrendingDown, Lock, CheckCircle, LockOpen, AlertTriangle } from 'lucide-react';
 import { addProcurementRecordAsync } from '../utils/blockchain';
 import { useTranslation } from '../utils/i18n';
+import { generateSalt, computeCommitment, storeBidSecret, getBidSecret, verifyReveal, verifyRevealedBid } from '../utils/commitReveal';
 
 interface TenderingPhaseProps {
   tenders: any[];
@@ -30,6 +31,8 @@ export function TenderingPhase({
   const [showBidForm, setShowBidForm] = useState(false);
   const [bidSuccess, setBidSuccess] = useState<{ bidId: string; tenderTitle: string; vendorName: string; amount: string; onChain: boolean } | null>(null);
   const [kycError, setKycError] = useState(false);
+  const [revealErrors, setRevealErrors] = useState<Record<string, string>>({});
+  const [revealingId, setRevealingId] = useState<string | null>(null);
   const [bidForm, setBidForm] = useState({
     vendorName: '',
     vendorEmail: '',
@@ -43,6 +46,21 @@ export function TenderingPhase({
 
   const publishedTenders = tenders.filter((td) => td.status === 'published');
 
+  // Only registered companies are selectable at all — an unregistered name
+  // is never an option in the dropdown, rather than something the form lets
+  // you type and then rejects after submission. For Restricted Bidding,
+  // narrow further to the invited list (Art. 3(9)) — this also closes a gap
+  // this form previously had: unlike SubmitBid.tsx, it never checked the
+  // invited-bidders list before, so an uninvited (even if registered)
+  // company could submit here.
+  const getSelectableCompanies = (tender: any) => {
+    if (tender?.method === 'Restricted Bidding') {
+      const invitedNames = new Set((tender.invitedBidders || []).map((b: any) => b.name?.toLowerCase().trim()));
+      return registeredSuppliers.filter((s: any) => invitedNames.has(s.companyName?.toLowerCase().trim()));
+    }
+    return registeredSuppliers;
+  };
+
   const handleSubmitBid = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -51,6 +69,12 @@ export function TenderingPhase({
       (s) => s.companyName?.toLowerCase().trim() === bidForm.vendorName?.toLowerCase().trim()
     );
     if (!registeredSupplier) {
+      setKycError(true);
+      return;
+    }
+    // Guard here too, not just the dropdown filter — Art. 3(9): only
+    // invited companies may bid on a Restricted Bidding tender.
+    if (!getSelectableCompanies(selectedTender).some((s: any) => s.companyName === bidForm.vendorName)) {
       setKycError(true);
       return;
     }
@@ -65,11 +89,22 @@ export function TenderingPhase({
       return;
     }
 
+    // Single-Source has one party and nothing competitive to hide; every
+    // other method commits a hash and keeps the real amount local until
+    // reveal (see src/utils/commitReveal.ts).
+    const isSingleSource = selectedTender.method === 'Single-Source';
+    const bidId = `BID-${Date.now()}`;
+    const salt = isSingleSource ? null : generateSalt();
+    const commitment = isSingleSource ? null : computeCommitment(bidForm.amount, salt!);
+
     const newBid = {
-      id: `BID-${Date.now()}`,
+      id: bidId,
       tenderId: selectedTender.id,
       tenderTitle: selectedTender.title,
       ...bidForm,
+      amount: isSingleSource ? bidForm.amount : null,
+      commitment,
+      revealed: isSingleSource ? undefined : false,
       vendorEmail: registeredSupplier.email,
       status: 'submitted',
       submittedAt: new Date().toISOString(),
@@ -77,9 +112,16 @@ export function TenderingPhase({
       score: null,
     };
 
+    if (!isSingleSource) {
+      storeBidSecret(bidId, bidForm.amount, salt!);
+    }
+
     const { block, contract, onChain } = await addProcurementRecordAsync('bid', {
+      bidId: newBid.id,
       tenderId: selectedTender.id,
       amount: bidForm.amount,
+      commitment,
+      isSingleSource,
       vendor: bidForm.vendorName,
     });
 
@@ -112,6 +154,51 @@ export function TenderingPhase({
       technicalProposal: '',
       experience: '',
     });
+  };
+
+  const handleReveal = async (bid: any) => {
+    const secret = getBidSecret(bid.id);
+    if (!secret) {
+      setRevealErrors((prev) => ({ ...prev, [bid.id]: 'No local secret found for this bid on this device — it cannot be revealed and will be excluded from evaluation.' }));
+      return;
+    }
+    if (!verifyReveal(secret.amount, secret.salt, bid.commitment)) {
+      setRevealErrors((prev) => ({ ...prev, [bid.id]: 'Revealed value does not match the original commitment — integrity check failed.' }));
+      return;
+    }
+    setRevealErrors((prev) => { const next = { ...prev }; delete next[bid.id]; return next; });
+    setRevealingId(bid.id);
+    try {
+      const { block, contract, success, onChain } = await addProcurementRecordAsync('bid_reveal', {
+        bidId: bid.id,
+        tenderId: bid.tenderId,
+        vendor: bid.vendorName,
+        amount: secret.amount,
+        salt: secret.salt,
+        timestamp: Date.now(),
+      });
+
+      // The salt is published alongside the amount so any reader can
+      // independently recompute the commitment rather than trusting this
+      // browser's own check above.
+      setBids(bids.map((b: any) => (b.id === bid.id ? { ...b, amount: secret.amount, salt: secret.salt, revealed: true, revealedAt: new Date().toISOString() } : b)));
+
+      if (success) {
+        setBlockchainRecords([...blockchainRecords, {
+          id: block.hash,
+          type: 'bid_revealed',
+          bidId: bid.id,
+          contractId: contract.id,
+          transactionHash: contract.transactionHash,
+          timestamp: new Date().toISOString(),
+          verified: onChain,
+          simulated: !onChain,
+          onChain,
+        }]);
+      }
+    } finally {
+      setRevealingId(null);
+    }
   };
 
   const getTenderBids = (tenderId: string) => {
@@ -248,21 +335,70 @@ export function TenderingPhase({
                                   ) : (
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d' }}>● Simulated</span>
                                   )}
+                                  {(() => {
+                                    const revealVerified = verifyRevealedBid(bid);
+                                    if (revealVerified === null) return null;
+                                    return (
+                                      <span
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: revealVerified ? '#065f46' : '#991b1b', background: revealVerified ? '#d1fae5' : '#fee2e2', border: `1px solid ${revealVerified ? '#6ee7b7' : '#fca5a5'}` }}
+                                        title={revealVerified ? 'The revealed (amount, salt) independently recomputes to the committed hash' : 'Revealed value does not match the original commitment'}
+                                      >
+                                        {revealVerified ? '✓ Verified reveal' : '✗ Integrity check failed'}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                                 <div className="grid grid-cols-3 gap-4 text-gray-600">
-                                  <div className="flex items-center gap-2">
-                                    <Banknote className="w-4 h-4" />
-                                    {Number(bid.amount).toLocaleString()} {t('tendering.afn')}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Calendar className="w-4 h-4" />
-                                    {bid.timeline}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <TrendingDown className="w-4 h-4" />
-                                    {((Number(bid.amount) / parseBudget(tender.budget)) * 100).toFixed(1)}{t('tendering.ofBudget')}
-                                  </div>
+                                  {bid.amount ? (
+                                    <>
+                                      <div className="flex items-center gap-2">
+                                        <Banknote className="w-4 h-4" />
+                                        {Number(bid.amount).toLocaleString()} {t('tendering.afn')}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4" />
+                                        {bid.timeline}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <TrendingDown className="w-4 h-4" />
+                                        {((Number(bid.amount) / parseBudget(tender.budget)) * 100).toFixed(1)}{t('tendering.ofBudget')}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-amber-700 col-span-2">
+                                      <Lock className="w-4 h-4" />
+                                      Sealed — amount not yet revealed by bidder
+                                    </div>
+                                  )}
                                 </div>
+                                {/* Only the bidder who committed this bid can reveal it — the
+                                    secret (amount + salt) lives solely in that bidder's own
+                                    browser (see commitReveal.ts). The Procuring Entity has no
+                                    way to legitimately reveal someone else's bid, so showing
+                                    this button on their shared view of the same screen would
+                                    be misleading (worse, it would silently "work" in a
+                                    single-browser demo session where both roles share
+                                    localStorage, which doesn't reflect the real two-party
+                                    trust boundary this scheme is demonstrating). */}
+                                {!bid.amount && bid.commitment && userRole !== 'government' && (
+                                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                    <button
+                                      type="button"
+                                      disabled={revealingId === bid.id}
+                                      onClick={() => handleReveal(bid)}
+                                      style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, border: 'none', background: '#0f2942', color: '#fff', cursor: 'pointer' }}
+                                      title="Only succeeds in the browser that originally submitted this bid"
+                                    >
+                                      <LockOpen style={{ width: 12, height: 12 }} />
+                                      {revealingId === bid.id ? 'Revealing…' : 'Reveal Bid'}
+                                    </button>
+                                    {revealErrors[bid.id] && (
+                                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#991b1b' }}>
+                                        <AlertTriangle style={{ width: 12, height: 12 }} /> {revealErrors[bid.id]}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                               <span
                                 className={`px-3 py-1 rounded-full ${
@@ -353,18 +489,35 @@ export function TenderingPhase({
                       <Building style={{ width: 14, height: 14, color: '#6e6c66' }} />
                       {t('tendering.vendorName')}
                     </label>
-                    <input
-                      type="text"
-                      required
-                      value={bidForm.vendorName}
-                      onChange={(e) => { setBidForm({ ...bidForm, vendorName: e.target.value }); setKycError(false); }}
-                      placeholder={t('tendering.vendorPlaceholder')}
-                      style={{
-                        width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
-                        border: kycError ? '1.5px solid #f87171' : '1px solid #e1e0d9',
-                        outline: 'none', background: '#fff', color: '#0b0b0b',
-                      }}
-                    />
+                    {(() => {
+                      const selectable = selectedTender ? getSelectableCompanies(selectedTender) : [];
+                      if (selectable.length === 0) {
+                        return (
+                          <div style={{ fontSize: 12, color: '#b91c1c', fontWeight: 600, padding: '9px 12px', border: '1.5px dashed #f87171', borderRadius: 8, background: '#fef2f2' }}>
+                            {selectedTender?.method === 'Restricted Bidding'
+                              ? 'None of the invited companies are registered yet via e-KYC.'
+                              : 'No companies are registered yet. Complete e-KYC registration before submitting a bid.'}
+                          </div>
+                        );
+                      }
+                      return (
+                        <select
+                          required
+                          value={bidForm.vendorName}
+                          onChange={(e) => { setBidForm({ ...bidForm, vendorName: e.target.value }); setKycError(false); }}
+                          style={{
+                            width: '100%', padding: '9px 12px', fontSize: 13, borderRadius: 8,
+                            border: kycError ? '1.5px solid #f87171' : '1px solid #e1e0d9',
+                            outline: 'none', background: '#fff', color: '#0b0b0b',
+                          }}
+                        >
+                          <option value="" disabled>Select your registered company…</option>
+                          {selectable.map((s: any) => (
+                            <option key={s.id || s.companyName} value={s.companyName}>{s.companyName}</option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                   </div>
                   <div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#0b0b0b', marginBottom: 6 }}>
@@ -517,7 +670,7 @@ export function TenderingPhase({
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                 <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Lock style={{ width: 12, height: 12 }} /> Sealed & Encrypted
+                  <Lock style={{ width: 12, height: 12 }} /> Sealed (Commit-Reveal)
                 </span>
                 {bidSuccess.onChain && (
                   <span style={{ fontSize: '11.5px', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>

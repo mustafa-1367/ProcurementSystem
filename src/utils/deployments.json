@@ -2,11 +2,11 @@
   "network": "sepolia",
   "chainId": 11155111,
   "contracts": {
-    "ProcurementSystem": "0x5D8ca4B7B3929624951c3AD321f3f09DF185b30E",
-    "ProcToken": "0xeA1694813ce93bdBA6CF3ad39Ff9a0fBFE0a5F6f",
-    "Groth16Verifier": "0xF4a71E22c07187dF6eA8Bf689B24EEfdD57BF370",
-    "WhistleblowerVerifier": "0xf3FC3eb93e38f3Be978Da0E5F1a24fD7fDb0E309"
+    "ProcurementSystem": "0xbc40400bD74BE28048208E8f0f9149B46ae17bF8",
+    "ProcToken": "0xCbF4db6B69B16d425bfbf4b167e27Fbcf6333EC9",
+    "Groth16Verifier": "0xC63b0fe8237f2Ced4c11dCAB8Df92640DA27BfD3",
+    "WhistleblowerVerifier": "0xCD1Bfa5AcEfAA5c9f3B63e671639E00811559A77"
   },
-  "deployer": "0xf25DA310af24B6C28237c173e81b19665766E875",
-  "timestamp": "2026-08-31T13:08:37.779Z"
+  "deployer": "0xBDBaC096c0b7a02e1BFF11953a2692cd49Da6914",
+  "timestamp": "2026-10-03T15:23:37.725Z"
 }

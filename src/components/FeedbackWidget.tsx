@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, X, ArrowLeft, Bug, Lightbulb, HelpCircle, Paperclip, FileText, Image, Video, Send } from 'lucide-react';
+import { MessageSquare, X, ArrowLeft, Bug, Lightbulb, HelpCircle, Paperclip, FileText, Image, Video, Send, AlertTriangle } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
+import { submitFeedback } from '../utils/sharedStorage';
 
 type View = 'menu' | 'bug' | 'feature' | 'question';
 
@@ -12,6 +13,8 @@ export function FeedbackWidget() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -21,6 +24,8 @@ export function FeedbackWidget() {
     setEmail('');
     setMessage('');
     setSubmitted(false);
+    setSubmitting(false);
+    setSubmitError(false);
     setAttachments([]);
   };
 
@@ -29,6 +34,8 @@ export function FeedbackWidget() {
     setEmail('');
     setMessage('');
     setSubmitted(false);
+    setSubmitting(false);
+    setSubmitError(false);
     setAttachments([]);
   };
 
@@ -59,7 +66,26 @@ export function FeedbackWidget() {
     return FileText;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (view === 'menu') return;
+    setSubmitting(true);
+    setSubmitError(false);
+    // Attachment *content* isn't uploaded anywhere — this project has no
+    // Firebase Storage (or any file-hosting) configured, only the
+    // Realtime Database used for everything else. Only the file names are
+    // recorded, so a bug report at least notes what the reporter attached
+    // locally, even though the file itself never left their browser.
+    const ok = await submitFeedback({
+      category: view,
+      email,
+      message,
+      attachmentNames: attachments.map((f) => f.name),
+    });
+    setSubmitting(false);
+    if (!ok) {
+      setSubmitError(true);
+      return;
+    }
     setSubmitted(true);
     setTimeout(() => {
       resetAndClose();
@@ -358,21 +384,27 @@ export function FeedbackWidget() {
                   {/* Submit button */}
                   <button
                     onClick={handleSubmit}
-                    disabled={!email || !message}
+                    disabled={!email || !message || submitting}
                     style={{
                       width: '100%', padding: '12px 20px', border: 'none', borderRadius: 10,
-                      background: (!email || !message) ? '#e5e7eb' : 'linear-gradient(135deg, #0f2942 0%, #173d61 100%)',
-                      color: (!email || !message) ? '#9ca3af' : '#fff',
-                      fontSize: 14, fontWeight: 700, cursor: (!email || !message) ? 'not-allowed' : 'pointer',
+                      background: (!email || !message || submitting) ? '#e5e7eb' : 'linear-gradient(135deg, #0f2942 0%, #173d61 100%)',
+                      color: (!email || !message || submitting) ? '#9ca3af' : '#fff',
+                      fontSize: 14, fontWeight: 700, cursor: (!email || !message || submitting) ? 'not-allowed' : 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                       transition: 'all .15s',
                     }}
-                    onMouseEnter={(e) => { if (email && message) e.currentTarget.style.opacity = '0.9'; }}
+                    onMouseEnter={(e) => { if (email && message && !submitting) e.currentTarget.style.opacity = '0.9'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
                   >
                     <Send style={{ width: 15, height: 15 }} />
-                    {t('feedback.send')}
+                    {submitting ? 'Sending…' : t('feedback.send')}
                   </button>
+                  {submitError && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12.5, color: '#991b1b' }}>
+                      <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0 }} />
+                      Couldn't send — check your connection and try again.
+                    </div>
+                  )}
                 </div>
               </>
             )}
