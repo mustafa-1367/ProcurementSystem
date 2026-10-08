@@ -15,10 +15,11 @@ A full-stack decentralized application (dApp) that brings transparency and accou
 | Subsystem | v1 | v2 |
 |---|---|---|
 | **Data persistence** | Browser memory only (React `useState`) — no database, no cross-session/cross-device visibility. Refreshing the page or opening on a second machine loses/hides all entered data. | Firebase Realtime Database (`src/utils/sharedStorage.ts`) — unauthenticated REST `fetch()`, 500ms-debounced whole-document overwrite. Shared and cross-device, but **no auth on the database itself** (see note below). |
-| **Bid confidentiality** | UI-only sealing (no smart contracts existed yet). | **"Sealed," not encrypted.** The bid `amount` is stored as a plain `uint256` in `contracts/ProcurementSystem.sol`'s `Bid` struct — visible to anyone reading chain state directly. Only the `getBid()` **getter function** is access-controlled: `require(block.timestamp > t.deadline, "Bids sealed until deadline")` (line ~166). No cryptographic hiding of the value exists at any point. |
+| **Bid confidentiality** | UI-only sealing (no smart contracts existed yet). | **Real commit-reveal sealing.** `commitBid()` stores only `keccak256(abi.encode(amount, salt))` in the `Bid` struct's `commitment` field (`contracts/ProcurementSystem.sol`, ~line 95) — the amount itself is never written on-chain until `revealBid()` is called after the deadline, and the chain itself refuses a reveal that doesn't recompute to the original commitment (`require(keccak256(abi.encode(amount, salt)) == b.commitment, ...)`, ~line 226) — integrity no longer depends on the app checking honestly. Single-Source bids skip this (nothing to seal against — Art. 3(10)) via `submitBidDirect`. |
 | **Whistleblower ZKP** | Not implemented. | Real Groth16 circuit (`circuits/whistleblower.circom`) and on-chain verifier (`WhistleblowerVerifier.sol` + `Groth16Verifier.sol`). **However**, `submitVerifiedReport()` sets `currentMerkleRoot = bytes32(merkleRoot)` from the **caller-supplied** parameter, unconditionally, before verifying the proof against that same self-supplied root — it never checks the proof against an owner-controlled, pre-registered membership root. `registerCommitment()` and `updateMerkleRoot()` (the only owner-gated path) exist but are never consulted by `submitVerifiedReport()`. Net effect: the proof shows internal consistency ("this proof matches the root I supplied"), not membership in an authoritative registered set. |
-| **Payments** | No smart contracts. | Milestone payments update a status field and emit `PaymentProcessed` via `recordPayment()` (`ProcurementSystem.sol`, ~line 187) — **no token transfer occurs**. A separate ERC-20 `ProcToken.sol` is deployed with working `transfer()`/`transferFrom()`, but is never called anywhere in the frontend; balances never move. |
+| **Payments** | No smart contracts. | Milestone payments update a status field and emit `PaymentProcessed` via `recordPayment()` (`ProcurementSystem.sol`, ~line 374) — **no token transfer occurs**. A separate ERC-20 `ProcToken.sol` is deployed with working `transfer()`/`transferFrom()`, but is never called anywhere in the frontend; balances never move. |
 | **DAO voting** | Not implemented. | Real on-chain `createDispute()`/`castVote()` with on-chain quorum/threshold auto-resolve (`VOTE_THRESHOLD`, `APPROVAL_RATE` in `ProcurementSystem.sol`). |
+| **Committee evaluation & award** | Not implemented — a single "Procuring Entity" user evaluated and awarded alone; no multi-member committee concept. | Real on-chain 2-of-3 committee voting and trustless award. `proposeCommittee()`/`approveCommittee()` (~line 275/289) require a Procurement Official and a separately-authorized Minister/Director; `voteOnBid()` (~line 307) records each seated member's Pass/Fail judgment; `finalizeAward()` (~line 346) computes the winner itself on-chain — lowest revealed amount among bids where `isBidQualified()` (~line 319) finds a 2-of-3 Pass majority — rather than accepting a vendor/amount the caller asserts. **However**, Stage 2's weighted technical score (QCBS, Art. 22(6)) is Firebase-only — the `Vote` struct has no field for it — so only the binary Preliminary/Qualification gates are verified on-chain; the numeric technical/financial ranking that actually picks the winner is computed client-side and not independently verifiable on-chain. |
 | **Smart contracts deployed (Sepolia)** | None. | 4 contracts: `ProcurementSystem`, `ProcToken`, `WhistleblowerVerifier`, `Groth16Verifier` (addresses below). |
 | **Audit dashboard** | Simulated data only. | Reads real on-chain events when a wallet is connected; falls back to local simulation otherwise, with on-chain/simulated status labeled in the UI per record. |
 | **Citizen incentive tokens** | Not implemented. | Reward amounts are tracked and displayed in-app via a local, in-memory simulated ledger (`blockchain.ts`'s `BlockchainService.addBlock()`) — **not** the deployed `ProcToken` ERC-20 contract. Resets on page reload; no real token custody. |
@@ -59,7 +60,7 @@ Public procurement faces systemic issues: opaque bid evaluations, contract manip
 
 ### Compliance
 - **Bidder Eligibility (KYC)** — registration, tax clearance, debarment checks per Afghan Procurement Law Art. 17
-- **Sealed Bidding** — bids encrypted until deadline passes
+- **Sealed Bidding** — bids sealed via on-chain hash commitment, revealed only after deadline
 - **Standstill Period** — mandatory 7-day window before contract finalization (per international best practice)
 - **Multi-language** — English, Dari, Pashto
 
@@ -145,10 +146,10 @@ npm run deploy:sepolia
 
 | Contract | Address |
 |----------|---------|
-| ProcurementSystem | `0x5D8ca4B7B3929624951c3AD321f3f09DF185b30E` |
-| ProcToken (ERC-20) | `0xeA1694813ce93bdBA6CF3ad39Ff9a0fBFE0a5F6f` |
-| WhistleblowerVerifier | `0xf3FC3eb93e38f3Be978Da0E5F1a24fD7fDb0E309` |
-| Groth16Verifier | `0xF4a71E22c07187dF6eA8Bf689B24EEfdD57BF370` |
+| ProcurementSystem | `0xbc40400bD74BE28048208E8f0f9149B46ae17bF8` |
+| ProcToken (ERC-20) | `0xCbF4db6B69B16d425bfbf4b167e27Fbcf6333EC9` |
+| WhistleblowerVerifier | `0xCD1Bfa5AcEfAA5c9f3B63e671639E00811559A77` |
+| Groth16Verifier | `0xC63b0fe8237f2Ced4c11dCAB8Df92640DA27BfD3` |
 
 ## Contributors
 
